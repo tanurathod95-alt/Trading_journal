@@ -13,7 +13,7 @@ interface WorkspaceAuthValue {
   accountsLoading: boolean
   accountsError: string | null
   refreshAccounts: () => Promise<void>
-  createAccount: (name: string, brokerName: string, accountType: string) => Promise<void>
+  createAccount: (name: string, brokerName: string, accountType: string, contactNumber?: string) => Promise<void>
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
@@ -130,11 +130,11 @@ export function WorkspaceAuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const createAccount = useCallback(
-    async (name: string, brokerName: string, accountType: string) => {
+    async (name: string, brokerName: string, accountType: string, contactNumber = '') => {
       if (!currentWorkspace) {
         return
       }
-      const created = await workspaceApi.createAccount(currentWorkspace.id, name, brokerName, accountType)
+      const created = await workspaceApi.createAccount(currentWorkspace.id, name, brokerName, accountType, contactNumber)
 
       // Immediately create and link a matching LOCAL (Dexie) account too, so
       // the new account is usable for logging trades right away — no

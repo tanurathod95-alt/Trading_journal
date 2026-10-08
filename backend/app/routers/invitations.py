@@ -106,6 +106,7 @@ def accept_invitation(
         name=account.name,
         broker_name=account.broker_name,
         account_type=account.account_type,
+        contact_number=account.contact_number,
         is_archived=account.is_archived,
         role=invitation.role.value,
         created_at=account.created_at,

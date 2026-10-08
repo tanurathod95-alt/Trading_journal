@@ -169,6 +169,10 @@ class TradingAccount(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     broker_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     account_type: Mapped[str] = mapped_column(String(60), nullable=False, default="Trading")
+    # E.164-ish "+<dial code><number>", e.g. "+919876543210". Validated for
+    # shape (not deliverability) at the schema layer — never required, since
+    # older accounts created before this field existed have none.
+    contact_number: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
     updated_at: Mapped[dt.datetime] = mapped_column(

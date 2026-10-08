@@ -25,6 +25,7 @@ def _out(account: models.TradingAccount, role: models.AccountRole) -> schemas.Tr
         name=account.name,
         broker_name=account.broker_name,
         account_type=account.account_type,
+        contact_number=account.contact_number,
         is_archived=account.is_archived,
         role=role.value,
         created_at=account.created_at,
@@ -51,6 +52,7 @@ def create_account(
         name=payload.name,
         broker_name=payload.broker_name,
         account_type=payload.account_type,
+        contact_number=payload.contact_number,
     )
     db.add(account)
     db.flush()
@@ -130,6 +132,8 @@ def update_account(
         account.broker_name = payload.broker_name
     if payload.account_type is not None:
         account.account_type = payload.account_type
+    if payload.contact_number is not None:
+        account.contact_number = payload.contact_number
     if payload.is_archived is not None:
         account.is_archived = payload.is_archived
     if "portfolio_id" in payload.model_fields_set:

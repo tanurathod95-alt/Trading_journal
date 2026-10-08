@@ -3,6 +3,17 @@ import { ApiError, workspaceApi, type PortfolioApi, type TradingAccountApi } fro
 import { useWorkspaceAuth } from './WorkspaceAuthContext'
 import { ManageAccessPanel } from './ManageAccessPanel'
 import { LinkLocalAccountPanel } from './LinkLocalAccountPanel'
+import { PhoneNumberInput, splitContactNumber } from './PhoneNumberInput'
+import { COUNTRY_DIAL_CODES } from './countryCodes'
+
+function formatContactNumber(contactNumber: string): string | null {
+  if (!contactNumber.trim()) {
+    return null
+  }
+  const { dial, number } = splitContactNumber(contactNumber)
+  const flag = COUNTRY_DIAL_CODES.find((c) => c.dial === dial)?.flag ?? ''
+  return `${flag} ${dial} ${number}`.trim()
+}
 
 export function MyAccountsModal({
   onClose,
@@ -20,7 +31,9 @@ export function MyAccountsModal({
   const [showAdd, setShowAdd] = useState(Boolean(autoOpenAdd))
   const [name, setName] = useState('')
   const [broker, setBroker] = useState('')
-  const [accountType, setAccountType] = useState(initialType ?? 'Trading')
+  const [accountType] = useState(initialType ?? 'Trading')
+  const [contactDial, setContactDial] = useState('+91')
+  const [contactNumber, setContactNumber] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [manageAccessFor, setManageAccessFor] = useState<TradingAccountApi | null>(null)
@@ -57,10 +70,12 @@ export function MyAccountsModal({
     setError(null)
     setSubmitting(true)
     try {
-      await createAccount(name, broker, accountType)
+      const trimmedNumber = contactNumber.trim()
+      await createAccount(name, broker, accountType, trimmedNumber ? `${contactDial}${trimmedNumber}` : '')
       setName('')
       setBroker('')
-      setAccountType(initialType ?? 'Trading')
+      setContactDial('+91')
+      setContactNumber('')
       setShowAdd(false)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not create the account.')
@@ -153,6 +168,9 @@ export function MyAccountsModal({
           <span className="ws-role-pill">{account.role}</span>
         </div>
         <p className="ws-muted">{account.broker_name || 'No broker set'} · {account.account_type}</p>
+        {formatContactNumber(account.contact_number) && (
+          <p className="ws-muted small">{formatContactNumber(account.contact_number)}</p>
+        )}
         <p className="ws-muted small">{account.is_archived ? 'Archived' : 'Active'}</p>
 
         <div className="ws-account-card-actions">
@@ -237,8 +255,13 @@ export function MyAccountsModal({
                 <input value={broker} onChange={(e) => setBroker(e.target.value)} maxLength={120} placeholder="e.g. Angel One" />
               </label>
               <label className="ws-field">
-                Type
-                <input value={accountType} onChange={(e) => setAccountType(e.target.value)} maxLength={60} />
+                Contact number
+                <PhoneNumberInput
+                  dial={contactDial}
+                  number={contactNumber}
+                  onDialChange={setContactDial}
+                  onNumberChange={setContactNumber}
+                />
               </label>
               <div className="ws-modal-actions">
                 <button type="button" className="ws-secondary-btn" onClick={() => setShowAdd(false)}>Cancel</button>

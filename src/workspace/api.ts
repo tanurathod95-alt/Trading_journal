@@ -107,6 +107,7 @@ export interface TradingAccountApi {
   name: string
   broker_name: string
   account_type: string
+  contact_number: string
   is_archived: boolean
   role: 'OWNER' | 'ADMIN' | 'VIEWER'
   created_at: string
@@ -255,13 +256,22 @@ export const workspaceApi = {
   listAccounts: (workspaceId?: string) =>
     request<TradingAccountApi[]>(`/api/accounts${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`),
 
-  createAccount: (workspaceId: string, name: string, brokerName: string, accountType: string) =>
+  createAccount: (workspaceId: string, name: string, brokerName: string, accountType: string, contactNumber = '') =>
     request<TradingAccountApi>('/api/accounts', {
       method: 'POST',
-      body: JSON.stringify({ workspace_id: workspaceId, name, broker_name: brokerName, account_type: accountType }),
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        name,
+        broker_name: brokerName,
+        account_type: accountType,
+        contact_number: contactNumber,
+      }),
     }),
 
-  updateAccount: (accountId: string, patch: Partial<Pick<TradingAccountApi, 'name' | 'broker_name' | 'account_type' | 'is_archived'>>) =>
+  updateAccount: (
+    accountId: string,
+    patch: Partial<Pick<TradingAccountApi, 'name' | 'broker_name' | 'account_type' | 'contact_number' | 'is_archived'>>,
+  ) =>
     request<TradingAccountApi>(`/api/accounts/${accountId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   deleteAccount: (accountId: string) => request<void>(`/api/accounts/${accountId}`, { method: 'DELETE' }),

@@ -88,12 +88,14 @@ class TradingAccountCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     broker_name: str = Field(default="", max_length=120)
     account_type: str = Field(default="Trading", max_length=60)
+    contact_number: str = Field(default="", max_length=32)
 
 
 class TradingAccountUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     broker_name: str | None = Field(default=None, max_length=120)
     account_type: str | None = Field(default=None, max_length=60)
+    contact_number: str | None = Field(default=None, max_length=32)
     is_archived: bool | None = None
     portfolio_id: str | None = None
 
@@ -105,6 +107,7 @@ class TradingAccountOut(BaseModel):
     name: str
     broker_name: str
     account_type: str
+    contact_number: str
     is_archived: bool
     role: str
     created_at: dt.datetime
