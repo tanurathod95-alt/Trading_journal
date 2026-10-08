@@ -1,4 +1,5 @@
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 
 const navLinks = [
   { to: '/features', label: 'Features' },
@@ -9,23 +10,45 @@ const navLinks = [
 ]
 
 export function MarketingLayout() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const location = useLocation()
+
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [location.pathname])
+
   return (
     <div className="mk-page">
       <header className="mk-nav">
-        <Link to="/" className="mk-nav-brand">
-          <span className="mk-nav-mark">TJ</span>
-          Trading Journal
-        </Link>
-        <nav className="mk-nav-links">
-          {navLinks.map((link) => (
-            <NavLink key={link.to} to={link.to} className={({ isActive }) => (isActive ? 'active' : '')}>
-              {link.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="mk-nav-cta">
-          <Link to="/app" className="mk-btn-secondary">Login</Link>
-          <Link to="/app" className="mk-btn-primary">Get Started</Link>
+        <div className="mk-nav-row">
+          <Link to="/" className="mk-nav-brand">
+            <span className="mk-nav-mark">TJ</span>
+            Trading Journal
+          </Link>
+          <button
+            type="button"
+            className="mk-nav-toggle"
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+        </div>
+        <div className={`mk-nav-collapsible ${menuOpen ? 'open' : ''}`}>
+          <nav className="mk-nav-links">
+            {navLinks.map((link) => (
+              <NavLink key={link.to} to={link.to} className={({ isActive }) => (isActive ? 'active' : '')}>
+                {link.label}
+              </NavLink>
+            ))}
+          </nav>
+          <div className="mk-nav-cta">
+            <Link to="/app" className="mk-btn-secondary">Login</Link>
+            <Link to="/app" className="mk-btn-primary">Get Started</Link>
+          </div>
         </div>
       </header>
 

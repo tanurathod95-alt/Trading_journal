@@ -26,15 +26,51 @@
 
 .mk-nav {
   position: relative;
-  z-index: 1;
+  z-index: 10;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 0;
   padding: 16px max(24px, env(safe-area-inset-left, 0px));
   padding-top: calc(16px + env(safe-area-inset-top, 0px));
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+}
+
+.mk-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mk-nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.mk-nav-toggle span {
+  display: block;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--text);
+}
+
+.mk-nav-collapsible {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
@@ -545,19 +581,77 @@
   font-weight: 600;
 }
 
-@media (max-width: 640px) {
-  .mk-nav {
-    justify-content: center;
-    text-align: center;
+@media (max-width: 768px) {
+  .mk-nav-toggle {
+    display: flex;
+  }
+
+  .mk-nav-collapsible {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.25s ease;
+    margin-top: 0;
+  }
+
+  .mk-nav-collapsible.open {
+    max-height: 420px;
+    opacity: 1;
+    margin-top: 16px;
   }
 
   .mk-nav-links {
-    justify-content: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
   }
 
+  .mk-nav-links a {
+    font-size: 15px;
+  }
+
+  .mk-nav-cta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .mk-nav-cta .mk-btn-primary,
+  .mk-nav-cta .mk-btn-secondary {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
   .mk-final-cta {
     margin: 8px 12px 0;
     padding: 44px 20px;
     border-radius: 18px;
+  }
+
+  .mk-hero {
+    padding: 48px 16px 36px;
+  }
+
+  .mk-section {
+    padding: 40px 16px;
+  }
+
+  .mk-section.tight {
+    padding-top: 24px;
+    padding-bottom: 24px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mk-hero h1 {
+    font-size: clamp(24px, 7vw, 32px);
+  }
+
+  .mk-browser-frame {
+    width: min(880px, 92vw);
   }
 }
