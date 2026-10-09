@@ -5,6 +5,8 @@ import {
   CalendarDays,
   CandlestickChart,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Download,
   Eye,
@@ -99,7 +101,7 @@ const navItems: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ 
   { key: 'open-trades', label: 'Open Trades', icon: NotebookPen },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
-  { key: 'accounts', label: 'Accounts', icon: Landmark },
+  { key: 'accounts', label: 'Broker', icon: Landmark },
   { key: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -270,6 +272,8 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [chartRange, setChartRange] = useState<'7D' | '30D' | '3M' | '1Y'>('30D')
+  const [calendarViewMode, setCalendarViewMode] = useState<'Month' | 'Week' | 'Day'>('Month')
+  const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date())
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -320,10 +324,17 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [filters, setFilters] = useState<JournalFilters>(defaultJournalFilters)
 
   const loadState = async (): Promise<void> => {
-    // Personal mode: only the user's own (local) accounts. View mode: only
-    // accounts shared with the user as VIEWER, never their own.
-    const nextAccounts = isPersonal ? await getAccounts() : []
-    const nextTrades = isPersonal ? await getTrades() : []
+    // Personal mode: only the user's own (local) accounts, excluding any
+    // Business-type account — creating a Business account server-side also
+    // mirrors it into this same local Dexie table (see
+    // WorkspaceAuthContext.createAccount) so it can log trades, but it must
+    // only ever appear in Business mode, never bleed into Personal. View
+    // mode: only accounts shared with the user as VIEWER, never their own.
+    const allLocalAccounts = isPersonal ? await getAccounts() : []
+    const nextAccounts = allLocalAccounts.filter((a) => a.accountType.trim().toLowerCase() !== 'business')
+    const personalAccountIds = new Set(nextAccounts.map((a) => a.id))
+    const allLocalTrades = isPersonal ? await getTrades() : []
+    const nextTrades = allLocalTrades.filter((t) => personalAccountIds.has(t.accountId))
     const storedName = await getProfileName()
     let remote: { accounts: Account[]; trades: Trade[] } = { accounts: [], trades: [] }
     if (mode === 'view') {
@@ -1133,6 +1144,109 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
 
     return Array.from(map.entries()).sort(([left], [right]) => right.localeCompare(left))
   }, [visibleTrades])
+
+  const calendarDayMap = useMemo(() => new Map(calendarDays), [calendarDays])
+
+  const toISODate = (d: Date): string => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  const addDays = (d: Date, days: number): Date => {
+    const copy = new Date(d)
+    copy.setDate(copy.getDate() + days)
+    return copy
+  }
+
+  const calendarWeekDates = useMemo(() => {
+    const start = addDays(calendarCursor, -calendarCursor.getDay())
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i))
+  }, [calendarCursor])
+
+  const calendarMonthWeeks = useMemo(() => {
+    const year = calendarCursor.getFullYear()
+    const month = calendarCursor.getMonth()
+    const firstOfMonth = new Date(year, month, 1)
+    const gridStart = addDays(firstOfMonth, -firstOfMonth.getDay())
+    const weeks: Date[][] = []
+    let cursor = gridStart
+    for (let week = 0; week < 6; week += 1) {
+      const row = Array.from({ length: 7 }, (_, i) => addDays(cursor, i))
+      weeks.push(row)
+      cursor = addDays(cursor, 7)
+    }
+    return weeks
+  }, [calendarCursor])
+
+  const calendarPeriodRange = useMemo((): [string, string] => {
+    if (calendarViewMode === 'Day') {
+      const iso = toISODate(calendarCursor)
+      return [iso, iso]
+    }
+    if (calendarViewMode === 'Week') {
+      return [toISODate(calendarWeekDates[0]), toISODate(calendarWeekDates[6])]
+    }
+    const year = calendarCursor.getFullYear()
+    const month = calendarCursor.getMonth()
+    const lastOfMonth = new Date(year, month + 1, 0)
+    return [toISODate(new Date(year, month, 1)), toISODate(lastOfMonth)]
+  }, [calendarViewMode, calendarCursor, calendarWeekDates])
+
+  const calendarPeriodTrades = useMemo(() => {
+    const [start, end] = calendarPeriodRange
+    return visibleTrades.filter((trade) => trade.tradeDate >= start && trade.tradeDate <= end)
+  }, [visibleTrades, calendarPeriodRange])
+
+  const calendarPeriodStats = useMemo(() => {
+    const closed = calendarPeriodTrades.filter((trade) => trade.status === 'CLOSED')
+    const wins = closed.filter((trade) => trade.netPnl > 0)
+    const net = calendarPeriodTrades.reduce((sum, trade) => sum + trade.netPnl, 0)
+    return {
+      total: calendarPeriodTrades.length,
+      net,
+      winRate: closed.length ? (wins.length / closed.length) * 100 : 0,
+    }
+  }, [calendarPeriodTrades])
+
+  const calendarPeriodLabel = useMemo(() => {
+    if (calendarViewMode === 'Day') {
+      return calendarCursor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    }
+    if (calendarViewMode === 'Week') {
+      const start = calendarWeekDates[0]
+      const end = calendarWeekDates[6]
+      const sameMonth = start.getMonth() === end.getMonth()
+      const startLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const endLabel = end.toLocaleDateString('en-US', sameMonth ? { day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })
+      return `${startLabel} – ${endLabel}`
+    }
+    return calendarCursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  }, [calendarViewMode, calendarCursor, calendarWeekDates])
+
+  const calendarGoPrev = (): void => {
+    setCalendarCursor((current) => {
+      if (calendarViewMode === 'Day') return addDays(current, -1)
+      if (calendarViewMode === 'Week') return addDays(current, -7)
+      return new Date(current.getFullYear(), current.getMonth() - 1, 1)
+    })
+  }
+
+  const calendarGoNext = (): void => {
+    setCalendarCursor((current) => {
+      if (calendarViewMode === 'Day') return addDays(current, 1)
+      if (calendarViewMode === 'Week') return addDays(current, 7)
+      return new Date(current.getFullYear(), current.getMonth() + 1, 1)
+    })
+  }
+
+  const calendarGoToday = (): void => setCalendarCursor(new Date())
+
+  const openDayInJournal = (iso: string): void => {
+    setFilters((current) => ({ ...current, startDate: iso, endDate: iso }))
+    setActiveTab('journal')
+  }
 
   const analyticsStats = useMemo(() => {
     const closedTrades = visibleTrades.filter((trade) => trade.status === 'CLOSED')
@@ -2054,42 +2168,154 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           )}
 
           {shownTab === 'calendar' && (
-            <section className="panel">
+            <section className="panel calendar-panel">
               <div className="page-header-row">
                 <div>
                   <h2>Calendar</h2>
-                  <p>Daily trading activity and P/L, at a glance.</p>
+                  <p>Track your trading activity, P/L and performance by date.</p>
                 </div>
               </div>
 
-              {calendarDays.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-icon"><CalendarDays size={22} /></div>
-                  <h3>No trades yet</h3>
-                  <p>Trades will appear here once you start journaling.</p>
-                  {!readOnly && (
-                    <button type="button" className="primary-btn" onClick={() => openTradeForm()}>
-                      <Plus size={18} />
-                      Add Trade
-                    </button>
+              <div className="calendar-layout">
+                <div className="calendar-main">
+                  <div className="calendar-toolbar">
+                    <div className="calendar-nav">
+                      <button type="button" className="calendar-nav-btn" onClick={calendarGoPrev} aria-label="Previous">
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button type="button" className="calendar-nav-btn" onClick={calendarGoToday} aria-label="Today">
+                        <CalendarDays size={16} />
+                      </button>
+                      <span className="calendar-period-label">{calendarPeriodLabel}</span>
+                      <button type="button" className="calendar-nav-btn" onClick={calendarGoNext} aria-label="Next">
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                    <div className="range-toggle">
+                      {(['Month', 'Week', 'Day'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={calendarViewMode === mode ? 'range-pill active' : 'range-pill'}
+                          onClick={() => setCalendarViewMode(mode)}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {calendarViewMode === 'Day' ? (
+                    <div className="calendar-day-view">
+                      {(() => {
+                        const iso = toISODate(calendarCursor)
+                        const dayTrades = calendarPeriodTrades
+                        return dayTrades.length === 0 ? (
+                          <div className="empty-state">
+                            <div className="empty-state-icon"><CalendarDays size={22} /></div>
+                            <h3>No trades on this day</h3>
+                            <p>Trades logged for this date will appear here.</p>
+                            {!readOnly && (
+                              <button type="button" className="primary-btn" onClick={() => openTradeForm()}>
+                                <Plus size={18} />
+                                Add Trade
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <button type="button" className="calendar-day-view-summary" onClick={() => openDayInJournal(iso)}>
+                            <strong>{dayTrades.length} {dayTrades.length === 1 ? 'trade' : 'trades'}</strong>
+                            <em className={calendarPeriodStats.net >= 0 ? 'profit' : 'loss'}>{getPnlLabel(calendarPeriodStats.net)}</em>
+                            <span>View in Journal →</span>
+                          </button>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="calendar-weekday-row">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                          <div key={d} className="calendar-weekday">{d}</div>
+                        ))}
+                      </div>
+                      <div className={calendarViewMode === 'Week' ? 'calendar-month-grid calendar-week-grid' : 'calendar-month-grid'}>
+                        {(calendarViewMode === 'Week' ? [calendarWeekDates] : calendarMonthWeeks).map((week, wi) =>
+                          week.map((date, di) => {
+                            const iso = toISODate(date)
+                            const payload = calendarDayMap.get(iso)
+                            const inMonth = calendarViewMode === 'Week' || date.getMonth() === calendarCursor.getMonth()
+                            const isToday = iso === toISODate(new Date())
+                            const dotClass = !payload ? '' : payload.pnl > 0 ? 'profitable' : payload.pnl < 0 ? 'loss' : 'flat'
+                            return (
+                              <button
+                                key={`${wi}-${di}`}
+                                type="button"
+                                className={`calendar-cell ${inMonth ? '' : 'outside-month'} ${isToday ? 'is-today' : ''}`}
+                                onClick={() => openDayInJournal(iso)}
+                              >
+                                <span className="calendar-cell-date">{date.getDate()}</span>
+                                {payload && (
+                                  <span className="calendar-cell-detail">
+                                    <span className={`calendar-cell-dot ${dotClass}`} />
+                                    {payload.count} {payload.count === 1 ? 'trade' : 'trades'}
+                                  </span>
+                                )}
+                              </button>
+                            )
+                          }),
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
-              ) : (
-                <div className="calendar-grid">
-                  {calendarDays.map(([date, payload]) => (
-                    <button
-                      key={date}
-                      type="button"
-                      className={`calendar-day ${payload.pnl > 0 ? 'day-positive' : payload.pnl < 0 ? 'day-negative' : ''}`}
-                      onClick={() => { setFilters((current) => ({ ...current, startDate: date, endDate: date })); setActiveTab('journal') }}
-                    >
-                      <span>{date}</span>
-                      <strong>{payload.count} {payload.count === 1 ? 'trade' : 'trades'}</strong>
-                      <em className={payload.pnl >= 0 ? 'profit' : 'loss'}>{getPnlLabel(payload.pnl)}</em>
-                    </button>
-                  ))}
-                </div>
-              )}
+
+                <aside className="calendar-sidebar">
+                  <h3>{calendarPeriodLabel}</h3>
+                  <div className="calendar-legend">
+                    <span><span className="calendar-cell-dot profitable" /> Profitable</span>
+                    <span><span className="calendar-cell-dot loss" /> Loss</span>
+                    <span><span className="calendar-cell-dot flat" /> No Trades</span>
+                  </div>
+
+                  <div className="calendar-stat-row">
+                    <div className="stat-icon"><ListChecks size={16} /></div>
+                    <div>
+                      <span>Total Trades</span>
+                      <strong>{calendarPeriodStats.total}</strong>
+                    </div>
+                  </div>
+                  <div className="calendar-stat-row">
+                    <div className="stat-icon"><TrendingUp size={16} /></div>
+                    <div>
+                      <span>Net P/L</span>
+                      <strong className={calendarPeriodStats.net >= 0 ? 'profit' : 'loss'}>{getPnlLabel(calendarPeriodStats.net)}</strong>
+                    </div>
+                  </div>
+                  <div className="calendar-stat-row">
+                    <div className="stat-icon"><Target size={16} /></div>
+                    <div>
+                      <span>Win Rate</span>
+                      <strong>{calendarPeriodStats.winRate.toFixed(1)}%</strong>
+                    </div>
+                  </div>
+
+                  {!readOnly && (
+                    <>
+                      <h4 className="calendar-quick-actions-title">Quick Actions</h4>
+                      <div className="calendar-quick-actions">
+                        <button type="button" className="primary-btn" onClick={() => openTradeForm()}>
+                          <Plus size={16} />
+                          Add Trade
+                        </button>
+                        <button type="button" className="secondary-btn" onClick={() => setActiveTab('analytics')}>
+                          <BarChart3 size={16} />
+                          View Reports
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </aside>
+              </div>
             </section>
           )}
 

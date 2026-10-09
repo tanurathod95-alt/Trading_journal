@@ -1250,6 +1250,291 @@ tr.selected-row {
   font-weight: 600;
 }
 
+/* ---- Calendar: month/week/day grid + sidebar ---- */
+
+.calendar-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.calendar-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.calendar-nav-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.calendar-period-label {
+  font-weight: 700;
+  font-size: 15px;
+  min-width: 150px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  margin-bottom: 6px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 4px 0;
+}
+
+.calendar-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+}
+
+.calendar-week-grid {
+  grid-template-rows: 1fr;
+}
+
+.calendar-cell {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 84px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.calendar-cell:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-cell.outside-month {
+  opacity: 0.4;
+}
+
+.calendar-cell.is-today {
+  border-color: var(--primary);
+}
+
+.calendar-cell.is-today .calendar-cell-date {
+  background: var(--primary);
+  color: white;
+}
+
+.calendar-cell-date {
+  font-weight: 700;
+  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.calendar-cell-detail {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.calendar-cell-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.calendar-cell-dot.profitable {
+  background: var(--success);
+}
+
+.calendar-cell-dot.loss {
+  background: var(--danger);
+}
+
+.calendar-cell-dot.flat {
+  background: var(--muted-soft);
+}
+
+.calendar-day-view {
+  padding: var(--space-3) 0;
+}
+
+.calendar-day-view-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  text-align: left;
+}
+
+.calendar-day-view-summary strong {
+  font-size: 18px;
+}
+
+.calendar-day-view-summary em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.calendar-day-view-summary span {
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.calendar-sidebar {
+  flex: 0 0 260px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.calendar-sidebar h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.calendar-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.calendar-stat-row:first-of-type {
+  border-top: none;
+}
+
+.calendar-stat-row > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-stat-row span {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.calendar-stat-row strong {
+  font-size: 15px;
+}
+
+.calendar-quick-actions-title {
+  margin: var(--space-2) 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.calendar-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .calendar-layout {
+    flex-direction: column;
+  }
+
+  .calendar-sidebar {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .calendar-cell {
+    min-height: 56px;
+    padding: 6px;
+  }
+
+  .calendar-cell-detail {
+    display: none;
+  }
+
+  .calendar-period-label {
+    min-width: 0;
+    font-size: 13px;
+  }
+}
+
 /* ---------------------------------- */
 /* Accounts                            */
 /* ---------------------------------- */
@@ -3785,4 +4070,47 @@ tbody tr:hover {
 .sidebar-back-btn:hover {
   color: var(--primary);
   background: transparent;
+}
+
+/* ---- Desktop app-shell scroll lock ----
+   Sidebar must never move, not even via `position: sticky` (which turned
+   out to depend on ancestor scroll-container quirks and wasn't reliable
+   here) — so on desktop the whole shell stops scrolling as a page, and
+   only `.content` becomes its own independent scroll region. Scoped to
+   >900px only: below that the sidebar collapses to icon-only (900px) or
+   hides behind the mobile bottom-nav (767px), both of which already use
+   the ordinary whole-page scroll and are left untouched. */
+@media (min-width: 901px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app-shell {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    flex: 0 0 auto;
+    position: static;
+  }
+
+  .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .sidebar {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .content {
+    height: 100%;
+    overflow-y: auto;
+  }
 }
