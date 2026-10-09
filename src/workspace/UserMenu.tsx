@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { LogOut, User } from 'lucide-react'
+import { Building2, LogOut, Receipt, User } from 'lucide-react'
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/)
@@ -10,11 +10,15 @@ export function UserMenu({
   displayName,
   email,
   onProfile,
+  onMyWorkspace,
+  onBilling,
   onLogout,
 }: {
   displayName: string
   email: string
   onProfile: () => void
+  onMyWorkspace?: () => void
+  onBilling?: () => void
   onLogout: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -49,6 +53,18 @@ export function UserMenu({
               <User size={15} />
               Profile &amp; Password
             </button>
+            {onMyWorkspace && (
+              <button type="button" className="ws-dropdown-item" onClick={() => { setOpen(false); onMyWorkspace() }}>
+                <Building2 size={15} />
+                My Workspace
+              </button>
+            )}
+            {onBilling && (
+              <button type="button" className="ws-dropdown-item" onClick={() => { setOpen(false); onBilling() }}>
+                <Receipt size={15} />
+                Billing
+              </button>
+            )}
             <button type="button" className="ws-dropdown-item ws-dropdown-item-danger" onClick={() => { setOpen(false); onLogout() }}>
               <LogOut size={15} />
               Logout

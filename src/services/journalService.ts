@@ -24,6 +24,31 @@ export async function saveProfileName(name: string): Promise<void> {
   await db.settings.put({ key: PROFILE_NAME_KEY, value: name.trim() })
 }
 
+const UPSTOX_CLIENT_ID_KEY = 'upstoxClientId'
+
+/** Not a secret (it's the OAuth app's public client id, not the server-only client_secret), so
+ * it's fine in the plain settings table — no need for secureCredentialStore's encryption. */
+export async function getUpstoxClientId(): Promise<string> {
+  const row = await db.settings.get(UPSTOX_CLIENT_ID_KEY)
+  return typeof row?.value === 'string' ? row.value : ''
+}
+
+export async function saveUpstoxClientId(clientId: string): Promise<void> {
+  await db.settings.put({ key: UPSTOX_CLIENT_ID_KEY, value: clientId.trim() })
+}
+
+const ZERODHA_API_KEY_KEY = 'zerodhaApiKey'
+
+/** Not a secret (Kite Connect's api_key, not api_secret) — same rationale as the Upstox client id. */
+export async function getZerodhaApiKey(): Promise<string> {
+  const row = await db.settings.get(ZERODHA_API_KEY_KEY)
+  return typeof row?.value === 'string' ? row.value : ''
+}
+
+export async function saveZerodhaApiKey(apiKey: string): Promise<void> {
+  await db.settings.put({ key: ZERODHA_API_KEY_KEY, value: apiKey.trim() })
+}
+
 export function toTradeFromDraft(draft: TradeDraft): Trade {
   const quantity = Number(draft.quantity) || 0
   const entryPrice = Number(draft.entryPrice) || 0

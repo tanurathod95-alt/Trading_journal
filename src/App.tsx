@@ -1,10 +1,12 @@
 import {
   ArrowLeft,
+  ArrowRight,
   BarChart3,
   Bell,
   CalendarDays,
   CandlestickChart,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Download,
   Eye,
@@ -17,6 +19,7 @@ import {
   Link2,
   ListChecks,
   Loader2,
+  RefreshCw,
   Lock,
   Menu,
   Moon,
@@ -32,6 +35,7 @@ import {
   TrendingUp,
   Unlink,
   User,
+  X,
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
@@ -48,10 +52,14 @@ import {
   getAttachmentByTradeId,
   getProfileName,
   getTrades,
+  getUpstoxClientId,
+  getZerodhaApiKey,
   importBackupBundle,
   saveAccount,
   saveProfileName,
   saveTrade,
+  saveUpstoxClientId,
+  saveZerodhaApiKey,
   toTradeFromDraft,
 } from './services/journalService'
 import type { Account, BackupBundle, Trade, TradeDraft, TradingSegment } from './types'
@@ -81,6 +89,13 @@ import type { MarketInstrument } from './components/TradingChart/chartTypes'
 import { fallbackInstrument, resolveInstrument, type AmbiguousResolution } from './services/marketData/instrumentResolver'
 import { marketDataService } from './services/marketData/MarketDataService'
 import { AngelOneProvider, angelOneProvider } from './services/marketData/adapters/angelOne/AngelOneProvider'
+import { syncAngelOneTrades } from './services/brokerSync/angelOneTradeSync'
+import { buildUpstoxAuthorizationUrl, exchangeUpstoxCode } from './services/brokerSync/upstox/upstoxAuth'
+import { syncUpstoxTrades } from './services/brokerSync/upstox/upstoxTradeSync'
+import { syncDhanTrades } from './services/brokerSync/dhan/dhanTradeSync'
+import { buildZerodhaLoginUrl, exchangeZerodhaRequestToken } from './services/brokerSync/zerodha/zerodhaAuth'
+import { syncZerodhaTrades } from './services/brokerSync/zerodha/zerodhaTradeSync'
+import { clearCredentials as clearDhanCredentials, loadCredentials as loadDhanCredentials, saveCredentials as saveDhanCredentials } from './services/brokerSync/secureCredentialStore'
 import {
   clearAngelOneCredentials,
   hasAngelOneCredentials,
@@ -90,6 +105,9 @@ import {
 } from './services/marketData/adapters/angelOne/secureCredentialStore'
 import type { AngelOneStatusSnapshot } from './services/marketData/adapters/angelOne/types'
 import angelOneLogo from './assets/angelone-logo.png'
+import upstoxLogo from './assets/upstox-logo.png'
+import zerodhaLogo from './assets/zerodha-logo.png'
+import dhanLogo from './assets/dhan-logo.png'
 
 type TabKey = 'dashboard' | 'journal' | 'open-trades' | 'calendar' | 'analytics' | 'accounts' | 'settings'
 
@@ -245,6 +263,60 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const readOnly = mode === 'view' || (mode === 'business' && businessAccounts.length > 0 && businessAccounts.every((a) => a.role === 'VIEWER'))
   const visibleNavItems = isPersonal ? navItems : navItems.filter((item) => !mutationTabKeys.includes(item.key))
   const visibleBottomNavItems = isPersonal ? bottomNavItems : bottomNavItems.filter((item) => !mutationTabKeys.includes(item.key))
+
+  const settingsSubItems: Array<{ key: 'profile' | 'broker' | 'data'; label: string }> = [
+    { key: 'profile', label: 'Profile' },
+    { key: 'broker', label: 'Broker Connection' },
+    { key: 'data', label: 'Data & Backup' },
+  ]
+
+  /** Renders one sidebar nav item — "Settings" expands into an indented submenu instead of
+   * navigating directly, since it owns three sub-pages (settingsTab) rather than one. Shared
+   * between the desktop sidebar and the mobile drawer so both stay in sync automatically. */
+  function renderNavItem(item: (typeof navItems)[number], afterClick: () => void): React.ReactNode {
+    const Icon = item.icon
+
+    if (item.key === 'settings') {
+      const expanded = settingsExpanded
+      return (
+        <div key={item.key} className="nav-item-group">
+          <button
+            type="button"
+            className={shownTab === 'settings' ? 'nav-item active' : 'nav-item'}
+            onClick={() => setSettingsExpanded((v) => !v)}
+          >
+            <Icon size={18} />
+            <span className="nav-label">{item.label}</span>
+            <ChevronDown size={14} className={expanded ? 'nav-item-chevron expanded' : 'nav-item-chevron'} />
+          </button>
+          <div className={expanded ? 'nav-submenu expanded' : 'nav-submenu'}>
+            {settingsSubItems.map((sub) => (
+              <button
+                key={sub.key}
+                type="button"
+                className={shownTab === 'settings' && settingsTab === sub.key ? 'nav-subitem active' : 'nav-subitem'}
+                onClick={() => { setActiveTab('settings'); setSettingsTab(sub.key); afterClick() }}
+              >
+                {sub.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <button
+        key={item.key}
+        type="button"
+        className={shownTab === item.key ? 'nav-item active' : 'nav-item'}
+        onClick={() => { setActiveTab(item.key); afterClick() }}
+      >
+        <Icon size={18} />
+        <span className="nav-label">{item.label}</span>
+      </button>
+    )
+  }
   const [accounts, setAccounts] = useState<Account[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
   // Accounts shared to this user via the backend workspace layer (Phase
@@ -291,7 +363,29 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [angelOneHasSaved, setAngelOneHasSaved] = useState(false)
   const [angelOneTesting, setAngelOneTesting] = useState(false)
   const [angelOneTestResult, setAngelOneTestResult] = useState<string | null>(null)
+  const [syncAccountId, setSyncAccountId] = useState('')
+  const [angelOneSyncing, setAngelOneSyncing] = useState(false)
+  const [angelOneSyncResult, setAngelOneSyncResult] = useState<string | null>(null)
+  const [upstoxClientId, setUpstoxClientId] = useState('')
+  const [upstoxAccessToken, setUpstoxAccessToken] = useState<string | null>(null)
+  const [upstoxConnecting, setUpstoxConnecting] = useState(false)
+  const [upstoxSyncAccountId, setUpstoxSyncAccountId] = useState('')
+  const [upstoxSyncing, setUpstoxSyncing] = useState(false)
+  const [upstoxSyncResult, setUpstoxSyncResult] = useState<string | null>(null)
+  const [dhanDraft, setDhanDraft] = useState<{ clientId: string; accessToken: string }>({ clientId: '', accessToken: '' })
+  const [dhanConnected, setDhanConnected] = useState(false)
+  const [dhanSyncAccountId, setDhanSyncAccountId] = useState('')
+  const [dhanSyncing, setDhanSyncing] = useState(false)
+  const [dhanSyncResult, setDhanSyncResult] = useState<string | null>(null)
+  const [zerodhaApiKey, setZerodhaApiKey] = useState('')
+  const [zerodhaAccessToken, setZerodhaAccessToken] = useState<string | null>(null)
+  const [zerodhaConnecting, setZerodhaConnecting] = useState(false)
+  const [zerodhaSyncAccountId, setZerodhaSyncAccountId] = useState('')
+  const [zerodhaSyncing, setZerodhaSyncing] = useState(false)
+  const [zerodhaSyncResult, setZerodhaSyncResult] = useState<string | null>(null)
   const [settingsTab, setSettingsTab] = useState<'profile' | 'broker' | 'data'>('profile')
+  const [settingsExpanded, setSettingsExpanded] = useState(false)
+  const [openBrokerModal, setOpenBrokerModal] = useState<'angelone' | 'upstox' | 'dhan' | 'zerodha' | null>(null)
   const [angelOneRevealed, setAngelOneRevealed] = useState({ apiKey: false, pin: false, totpSecret: false })
   const [profileName, setProfileName] = useState('')
   const [profileModalOpen, setProfileModalOpen] = useState(false)
@@ -308,6 +402,13 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     }
     return 'light'
   })
+
+  useEffect(() => {
+    if (shownTab === 'settings') {
+      setSettingsExpanded(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shownTab])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -379,6 +480,63 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
       }
     })
     return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    const DHAN_BROKER_ID = 'dhan'
+    void loadDhanCredentials<{ clientId: string; accessToken: string }>(DHAN_BROKER_ID).then((saved) => {
+      if (saved) {
+        setDhanDraft(saved)
+        setDhanConnected(true)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    void getUpstoxClientId().then(setUpstoxClientId)
+    void getZerodhaApiKey().then(setZerodhaApiKey)
+
+    // Upstox redirects back here with ?code=..., Zerodha with ?request_token=... — after the
+    // user logs in on the broker's own page. This app has no client-side router for the
+    // authenticated app, so the redirect is read off the current URL directly rather than
+    // through a dedicated route.
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const requestToken = params.get('request_token')
+    if (!code && !requestToken) return
+
+    void (async () => {
+      if (code) {
+        setUpstoxConnecting(true)
+        try {
+          const clientId = await getUpstoxClientId()
+          const redirectUri = window.location.origin + window.location.pathname
+          const token = await exchangeUpstoxCode(code, clientId, redirectUri)
+          setUpstoxAccessToken(token)
+          setMessage('Upstox connected.')
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : 'Could not complete Upstox connection.')
+        } finally {
+          setUpstoxConnecting(false)
+        }
+      } else if (requestToken) {
+        setZerodhaConnecting(true)
+        try {
+          const apiKey = await getZerodhaApiKey()
+          const token = await exchangeZerodhaRequestToken(requestToken, apiKey)
+          setZerodhaAccessToken(token)
+          setMessage('Zerodha connected.')
+        } catch (error) {
+          setMessage(error instanceof Error ? error.message : 'Could not complete Zerodha connection.')
+        } finally {
+          setZerodhaConnecting(false)
+        }
+      }
+      // Strip ?code=.../?request_token=... from the URL so a page refresh doesn't try to reuse
+      // the already-consumed, single-use authorization code/request token.
+      window.history.replaceState({}, '', window.location.pathname)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -771,6 +929,187 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
       setAngelOneTestResult(error instanceof Error ? error.message : 'Connection failed.')
     } finally {
       setAngelOneTesting(false)
+    }
+  }
+
+  const handleAngelOneSync = async (): Promise<void> => {
+    const session = angelOneProvider.getSession()
+    if (!session) {
+      setMessage('Connect Angel One before syncing trades.')
+      return
+    }
+    if (!syncAccountId) {
+      setMessage('Choose which account to import trades into.')
+      return
+    }
+    setAngelOneSyncing(true)
+    setAngelOneSyncResult(null)
+    try {
+      const existingForAccount = trades.filter((t) => t.accountId === syncAccountId)
+      const result = await syncAngelOneTrades(session, syncAccountId, existingForAccount)
+      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
+        await saveTrade(trade)
+      }
+      const importedCount = result.newTrades.length + result.updatedTrades.length
+      setAngelOneSyncResult(
+        importedCount === 0 && result.skipped === 0
+          ? 'No trades found for today.'
+          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
+      )
+      localStorage.setItem(`angelone-last-sync-${syncAccountId}`, new Date().toISOString())
+      await refreshAfterTradeAction()
+    } catch (error) {
+      setAngelOneSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Angel One.')
+    } finally {
+      setAngelOneSyncing(false)
+    }
+  }
+
+  const handleUpstoxConnect = async (): Promise<void> => {
+    const clientId = upstoxClientId.trim()
+    if (!clientId) {
+      setMessage('Enter your Upstox Client ID before connecting.')
+      return
+    }
+    await saveUpstoxClientId(clientId)
+    const redirectUri = window.location.origin + window.location.pathname
+    window.location.href = buildUpstoxAuthorizationUrl({ clientId, redirectUri })
+  }
+
+  const handleUpstoxDisconnect = (): void => {
+    setUpstoxAccessToken(null)
+    setMessage('Upstox disconnected.')
+  }
+
+  const handleUpstoxSync = async (): Promise<void> => {
+    if (!upstoxAccessToken) {
+      setMessage('Connect Upstox before syncing trades.')
+      return
+    }
+    if (!upstoxSyncAccountId) {
+      setMessage('Choose which account to import trades into.')
+      return
+    }
+    setUpstoxSyncing(true)
+    setUpstoxSyncResult(null)
+    try {
+      const lastSyncKey = `upstox-last-sync-${upstoxSyncAccountId}`
+      const isFirstSync = !localStorage.getItem(lastSyncKey)
+      const existingForAccount = trades.filter((t) => t.accountId === upstoxSyncAccountId)
+      const result = await syncUpstoxTrades(upstoxAccessToken, upstoxSyncAccountId, existingForAccount, isFirstSync)
+      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
+        await saveTrade(trade)
+      }
+      const importedCount = result.newTrades.length + result.updatedTrades.length
+      setUpstoxSyncResult(
+        importedCount === 0 && result.skipped === 0
+          ? 'No trades found.'
+          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'}${result.backfilled ? ' (including historical backfill)' : ''} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
+      )
+      localStorage.setItem(lastSyncKey, new Date().toISOString())
+      await refreshAfterTradeAction()
+    } catch (error) {
+      setUpstoxSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Upstox.')
+    } finally {
+      setUpstoxSyncing(false)
+    }
+  }
+
+  const DHAN_BROKER_ID = 'dhan'
+
+  const handleDhanSave = async (): Promise<void> => {
+    const clientId = dhanDraft.clientId.trim()
+    const accessToken = dhanDraft.accessToken.trim()
+    if (!clientId || !accessToken) {
+      setMessage('Enter both your Dhan Client ID and Access Token.')
+      return
+    }
+    await saveDhanCredentials(DHAN_BROKER_ID, { clientId, accessToken })
+    setDhanConnected(true)
+    setMessage('Dhan connected.')
+  }
+
+  const handleDhanForget = async (): Promise<void> => {
+    await clearDhanCredentials(DHAN_BROKER_ID)
+    setDhanDraft({ clientId: '', accessToken: '' })
+    setDhanConnected(false)
+    setMessage('Dhan credentials removed from this device.')
+  }
+
+  const handleDhanSync = async (): Promise<void> => {
+    if (!dhanConnected || !dhanDraft.accessToken) {
+      setMessage('Connect Dhan before syncing trades.')
+      return
+    }
+    if (!dhanSyncAccountId) {
+      setMessage('Choose which account to import trades into.')
+      return
+    }
+    setDhanSyncing(true)
+    setDhanSyncResult(null)
+    try {
+      const existingForAccount = trades.filter((t) => t.accountId === dhanSyncAccountId)
+      const result = await syncDhanTrades(dhanDraft.accessToken, dhanSyncAccountId, existingForAccount)
+      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
+        await saveTrade(trade)
+      }
+      const importedCount = result.newTrades.length + result.updatedTrades.length
+      setDhanSyncResult(
+        importedCount === 0 && result.skipped === 0
+          ? 'No trades found for today.'
+          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
+      )
+      await refreshAfterTradeAction()
+    } catch (error) {
+      setDhanSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Dhan.')
+    } finally {
+      setDhanSyncing(false)
+    }
+  }
+
+  const handleZerodhaConnect = async (): Promise<void> => {
+    const apiKey = zerodhaApiKey.trim()
+    if (!apiKey) {
+      setMessage('Enter your Zerodha API Key before connecting.')
+      return
+    }
+    await saveZerodhaApiKey(apiKey)
+    window.location.href = buildZerodhaLoginUrl(apiKey)
+  }
+
+  const handleZerodhaDisconnect = (): void => {
+    setZerodhaAccessToken(null)
+    setMessage('Zerodha disconnected.')
+  }
+
+  const handleZerodhaSync = async (): Promise<void> => {
+    if (!zerodhaAccessToken) {
+      setMessage('Connect Zerodha before syncing trades.')
+      return
+    }
+    if (!zerodhaSyncAccountId) {
+      setMessage('Choose which account to import trades into.')
+      return
+    }
+    setZerodhaSyncing(true)
+    setZerodhaSyncResult(null)
+    try {
+      const existingForAccount = trades.filter((t) => t.accountId === zerodhaSyncAccountId)
+      const result = await syncZerodhaTrades(zerodhaApiKey, zerodhaAccessToken, zerodhaSyncAccountId, existingForAccount)
+      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
+        await saveTrade(trade)
+      }
+      const importedCount = result.newTrades.length + result.updatedTrades.length
+      setZerodhaSyncResult(
+        importedCount === 0 && result.skipped === 0
+          ? 'No trades found for today.'
+          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
+      )
+      await refreshAfterTradeAction()
+    } catch (error) {
+      setZerodhaSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Zerodha.')
+    } finally {
+      setZerodhaSyncing(false)
     }
   }
 
@@ -1271,20 +1610,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               <button type="button" className="close-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
             </div>
             <nav className="mobile-menu-nav">
-              {visibleNavItems.map((item) => {
-                const Icon = item.icon
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className={shownTab === item.key ? 'nav-item active' : 'nav-item'}
-                    onClick={() => { setActiveTab(item.key); onTabSelect?.(); setMobileMenuOpen(false) }}
-                  >
-                    <Icon size={18} />
-                    <span className="nav-label">{item.label}</span>
-                  </button>
-                )
-              })}
+              {visibleNavItems.map((item) => renderNavItem(item, () => { onTabSelect?.(); setMobileMenuOpen(false) }))}
               {extraNav.map((item) => {
                 const Icon = item.icon
                 return (
@@ -1428,20 +1754,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
             </button>
           )}
           <nav className="sidebar-nav">
-            {visibleNavItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={shownTab === item.key ? 'nav-item active' : 'nav-item'}
-                  onClick={() => { setActiveTab(item.key); onTabSelect?.() }}
-                >
-                  <Icon size={18} />
-                  <span className="nav-label">{item.label}</span>
-                </button>
-              )
-            })}
+            {visibleNavItems.map((item) => renderNavItem(item, () => onTabSelect?.()))}
             {extraNav.map((item) => {
               const Icon = item.icon
               return (
@@ -2344,42 +2657,16 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
             <section className="panel settings-panel">
               <div className="page-header-row">
                 <div>
-                  <h2>Settings</h2>
-                  <p>Manage your account, broker connections and application preferences.</p>
+                  <p className="settings-breadcrumb">Settings / {settingsTab === 'profile' ? 'Profile' : settingsTab === 'broker' ? 'Broker Connection' : 'Data & Backup'}</p>
+                  <h2>{settingsTab === 'profile' ? 'Profile' : settingsTab === 'broker' ? 'Broker Connection' : 'Data & Backup'}</h2>
+                  <p>
+                    {settingsTab === 'profile'
+                      ? 'Manage your account and application preferences.'
+                      : settingsTab === 'broker'
+                        ? 'Connect your trading account with your broker to automatically sync trades, positions and get real-time data.'
+                        : 'Export a backup of your journal, or restore from a previous export.'}
+                  </p>
                 </div>
-              </div>
-
-              <div className="settings-tabs" role="tablist" aria-label="Settings sections">
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={settingsTab === 'profile'}
-                  className={`settings-tab-btn ${settingsTab === 'profile' ? 'active' : ''}`}
-                  onClick={() => setSettingsTab('profile')}
-                >
-                  <User size={15} />
-                  Profile
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={settingsTab === 'broker'}
-                  className={`settings-tab-btn ${settingsTab === 'broker' ? 'active' : ''}`}
-                  onClick={() => setSettingsTab('broker')}
-                >
-                  <Link2 size={15} />
-                  Broker Connections
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={settingsTab === 'data'}
-                  className={`settings-tab-btn ${settingsTab === 'data' ? 'active' : ''}`}
-                  onClick={() => setSettingsTab('data')}
-                >
-                  <Download size={15} />
-                  Data &amp; Backup
-                </button>
               </div>
 
               {settingsTab === 'profile' && (
@@ -2403,8 +2690,130 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               )}
 
               {settingsTab === 'broker' && (
-                <div className="broker-settings-layout">
-                  <div className="broker-card">
+                <>
+                  <div className="broker-secure-banner">
+                    <ShieldCheck size={18} />
+                    <div>
+                      <strong>Secure &amp; Trusted</strong>
+                      <p>We use industry-standard encryption and bank-grade security to keep your data safe and private.</p>
+                    </div>
+                  </div>
+
+                  <div className="broker-grid">
+                    {([
+                      {
+                        id: 'upstox' as const,
+                        name: 'Upstox',
+                        logo: upstoxLogo,
+                        accentClass: 'broker-summary-upstox',
+                        description: 'Trade smarter with Upstox. Connect your account to sync trades, positions and portfolio data.',
+                        features: ['Live Trade Sync', 'Positions', 'Holdings'],
+                        connected: Boolean(upstoxAccessToken),
+                      },
+                      {
+                        id: 'zerodha' as const,
+                        name: 'Zerodha',
+                        logo: zerodhaLogo,
+                        accentClass: 'broker-summary-zerodha',
+                        description: 'Connect your Zerodha account to import trades, positions and holdings automatically.',
+                        features: ['Live Trade Sync', 'Positions', 'Holdings'],
+                        connected: Boolean(zerodhaAccessToken),
+                      },
+                      {
+                        id: 'dhan' as const,
+                        name: 'Dhan',
+                        logo: dhanLogo,
+                        accentClass: 'broker-summary-dhan',
+                        description: 'Link your Dhan account to get real-time trade data, positions and portfolio updates.',
+                        features: ['Live Trade Sync', 'Positions', 'Holdings'],
+                        connected: dhanConnected,
+                      },
+                      {
+                        id: 'angelone' as const,
+                        name: 'Angel One',
+                        logo: angelOneLogo,
+                        accentClass: 'broker-summary-angelone',
+                        description: 'Connect your Angel One account to sync your trades, positions and holdings seamlessly.',
+                        features: ['Live Trade Sync', 'Positions', 'Holdings'],
+                        connected: angelOneStatus.status === 'connected',
+                      },
+                    ]).map((broker) => (
+                      <div key={broker.id} className={`broker-summary-card ${broker.accentClass}`}>
+                        <div className="broker-summary-top">
+                          <div className="broker-summary-icon">
+                            <img
+                              src={broker.logo}
+                              alt={broker.name}
+                              onError={(event) => {
+                                event.currentTarget.style.display = 'none'
+                                const fallback = event.currentTarget.nextElementSibling as HTMLElement | null
+                                if (fallback) fallback.style.display = 'flex'
+                              }}
+                            />
+                            <span className="broker-summary-icon-fallback" style={{ display: 'none' }}>{broker.name.charAt(0)}</span>
+                          </div>
+                          <button type="button" className="broker-summary-arrow" aria-label={`Connect ${broker.name}`} onClick={() => setOpenBrokerModal(broker.id)}>
+                            <ArrowRight size={16} />
+                          </button>
+                        </div>
+                        <h3>{broker.name}</h3>
+                        <p>{broker.description}</p>
+                        <ul className="broker-summary-features">
+                          {broker.features.map((f) => (
+                            <li key={f}><CheckCircle2 size={13} /> {f}</li>
+                          ))}
+                        </ul>
+                        <button type="button" className="primary-btn broker-summary-connect" onClick={() => setOpenBrokerModal(broker.id)}>
+                          {broker.connected ? 'Manage Connection' : 'Connect Account'}
+                          <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <aside className="quick-info-card">
+                    <h4>Quick Info</h4>
+
+                    <div className="quick-info-section">
+                      <span className="quick-info-heading">Supported Markets</span>
+                      <ul>
+                        <li><CheckCircle2 size={14} /> NSE Equities</li>
+                        <li><CheckCircle2 size={14} /> NSE Indices</li>
+                        <li><CheckCircle2 size={14} /> NFO Options</li>
+                        <li><CheckCircle2 size={14} /> NFO Futures</li>
+                      </ul>
+                    </div>
+
+                    <div className="quick-info-section">
+                      <span className="quick-info-heading">Data Features</span>
+                      <ul>
+                        <li><CheckCircle2 size={14} /> Historical OHLC</li>
+                        <li><CheckCircle2 size={14} /> Live Quotes</li>
+                        <li><CheckCircle2 size={14} /> Live Trading Charts</li>
+                      </ul>
+                    </div>
+
+                    <div className="quick-info-section">
+                      <span className="quick-info-heading">Security Notes</span>
+                      <ul>
+                        <li><CheckCircle2 size={14} /> Credentials encrypted locally (AES-GCM)</li>
+                        <li><CheckCircle2 size={14} /> Never stored or logged in plain text</li>
+                        <li><CheckCircle2 size={14} /> Session tokens kept in memory only</li>
+                      </ul>
+                    </div>
+
+                    <div className="quick-info-success-box">
+                      <strong>Your data stays with you</strong>
+                      <p>Your journal data and broker credentials remain on this device — nothing is uploaded to our servers.</p>
+                    </div>
+                  </aside>
+                </>
+              )}
+
+              {settingsTab === 'broker' && openBrokerModal === 'angelone' && (
+                <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
+                  <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
                     <div className="broker-card-header">
                       <div className="broker-card-heading">
                         <div className="broker-icon">
@@ -2561,44 +2970,311 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                         <button type="button" className="danger-btn" onClick={() => void handleAngelOneForget()}>Forget Saved Credentials</button>
                       )}
                     </div>
+
+                    {angelOneStatus.status === 'connected' && (
+                      <>
+                        <h4 className="broker-section-title">Sync Trades</h4>
+                        <p className="broker-status-message is-muted">
+                          Imports today's executed trades from Angel One. Trades held across multiple days are matched
+                          against your existing open trades automatically — nothing is ever duplicated on a re-sync.
+                        </p>
+                        <div className="form-row">
+                          <label>
+                            Import into account
+                            <select value={syncAccountId} onChange={(event) => setSyncAccountId(event.target.value)}>
+                              <option value="">Select an account…</option>
+                              {accountOptions.map((account) => (
+                                <option key={account.id} value={account.id}>{account.accountName}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {angelOneSyncResult && (
+                          <p className={`broker-status-message ${angelOneSyncResult.startsWith('Imported') || angelOneSyncResult.startsWith('No trades') ? 'is-success' : 'is-danger'}`}>
+                            {angelOneSyncResult}
+                          </p>
+                        )}
+                        <div className="mini-actions broker-actions">
+                          <button type="button" className="primary-btn" disabled={!syncAccountId || angelOneSyncing} onClick={() => void handleAngelOneSync()}>
+                            {angelOneSyncing ? <Loader2 size={16} className="spin-icon" /> : <RefreshCw size={16} />}
+                            {angelOneSyncing ? 'Syncing…' : 'Sync Trades'}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
+                </div>
+              )}
 
-                  <aside className="quick-info-card">
-                    <h4>Quick Info</h4>
-
-                    <div className="quick-info-section">
-                      <span className="quick-info-heading">Supported Markets</span>
-                      <ul>
-                        <li><CheckCircle2 size={14} /> NSE Equities</li>
-                        <li><CheckCircle2 size={14} /> NSE Indices</li>
-                        <li><CheckCircle2 size={14} /> NFO Options</li>
-                        <li><CheckCircle2 size={14} /> NFO Futures</li>
-                      </ul>
+              {settingsTab === 'broker' && openBrokerModal === 'upstox' && (
+                <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
+                  <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
+                    <div className="broker-card-header">
+                      <div className="broker-card-heading">
+                        <div>
+                          <div className="broker-title-row">
+                            <h3>Upstox</h3>
+                            <span className="broker-api-pill">OAuth</span>
+                          </div>
+                          <p>Import your executed trades from Upstox, including historical backfill on first connect.</p>
+                        </div>
+                      </div>
+                      <span className={`badge ${upstoxAccessToken ? 'badge-closed' : upstoxConnecting ? 'badge-open' : 'badge-sell'}`}>
+                        ● {upstoxAccessToken ? 'Connected' : upstoxConnecting ? 'Connecting…' : 'Disconnected'}
+                      </span>
                     </div>
 
-                    <div className="quick-info-section">
-                      <span className="quick-info-heading">Data Features</span>
-                      <ul>
-                        <li><CheckCircle2 size={14} /> Historical OHLC</li>
-                        <li><CheckCircle2 size={14} /> Live Quotes</li>
-                        <li><CheckCircle2 size={14} /> Live Trading Charts</li>
-                      </ul>
+                    <div className="security-note-panel">
+                      <Lock size={16} />
+                      <div>
+                        <strong>Secure &amp; Encrypted</strong>
+                        <p>
+                          Your Client ID is stored on this device only. Upstox's own login page handles your password — this
+                          app never sees it. The one secret this connection needs (the app's OAuth client secret) lives only
+                          on the backend server, never in this page.
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="quick-info-section">
-                      <span className="quick-info-heading">Security Notes</span>
-                      <ul>
-                        <li><CheckCircle2 size={14} /> Credentials encrypted locally (AES-GCM)</li>
-                        <li><CheckCircle2 size={14} /> Never stored or logged in plain text</li>
-                        <li><CheckCircle2 size={14} /> Session tokens kept in memory only</li>
-                      </ul>
+                    <h4 className="broker-section-title">Connection Details</h4>
+                    <div className="form-row">
+                      <label>
+                        Client ID <span className="required-dot">*</span>
+                        <input
+                          autoComplete="off"
+                          value={upstoxClientId}
+                          onChange={(event) => setUpstoxClientId(event.target.value)}
+                          placeholder="From Upstox developer console"
+                        />
+                      </label>
                     </div>
 
-                    <div className="quick-info-success-box">
-                      <strong>Your data stays with you</strong>
-                      <p>Your journal data and broker credentials remain on this device — nothing is uploaded to our servers.</p>
+                    <div className="mini-actions broker-actions">
+                      {upstoxAccessToken ? (
+                        <button type="button" className="secondary-btn" onClick={handleUpstoxDisconnect}>
+                          <Unlink size={16} />
+                          Disconnect
+                        </button>
+                      ) : (
+                        <button type="button" className="primary-btn" disabled={!upstoxClientId.trim() || upstoxConnecting} onClick={() => void handleUpstoxConnect()}>
+                          <Link2 size={16} />
+                          Connect
+                        </button>
+                      )}
                     </div>
-                  </aside>
+
+                    {upstoxAccessToken && (
+                      <>
+                        <h4 className="broker-section-title">Sync Trades</h4>
+                        <div className="form-row">
+                          <label>
+                            Import into account
+                            <select value={upstoxSyncAccountId} onChange={(event) => setUpstoxSyncAccountId(event.target.value)}>
+                              <option value="">Select an account…</option>
+                              {accountOptions.map((account) => (
+                                <option key={account.id} value={account.id}>{account.accountName}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {upstoxSyncResult && (
+                          <p className={`broker-status-message ${upstoxSyncResult.startsWith('Imported') || upstoxSyncResult.startsWith('No trades') ? 'is-success' : 'is-danger'}`}>
+                            {upstoxSyncResult}
+                          </p>
+                        )}
+                        <div className="mini-actions broker-actions">
+                          <button type="button" className="primary-btn" disabled={!upstoxSyncAccountId || upstoxSyncing} onClick={() => void handleUpstoxSync()}>
+                            {upstoxSyncing ? <Loader2 size={16} className="spin-icon" /> : <RefreshCw size={16} />}
+                            {upstoxSyncing ? 'Syncing…' : 'Sync Trades'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'broker' && openBrokerModal === 'dhan' && (
+                <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
+                  <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
+                    <div className="broker-card-header">
+                      <div className="broker-card-heading">
+                        <div>
+                          <div className="broker-title-row">
+                            <h3>Dhan</h3>
+                            <span className="broker-api-pill">Token</span>
+                          </div>
+                          <p>Import your executed trades from Dhan.</p>
+                        </div>
+                      </div>
+                      <span className={`badge ${dhanConnected ? 'badge-closed' : 'badge-sell'}`}>
+                        ● {dhanConnected ? 'Connected' : 'Disconnected'}
+                      </span>
+                    </div>
+
+                    <div className="security-note-panel">
+                      <Lock size={16} />
+                      <div>
+                        <strong>Secure &amp; Encrypted</strong>
+                        <p>
+                          Stored encrypted on this device only. Dhan access tokens are valid for 24 hours — generate a new
+                          one from web.dhan.co → My Profile → Access DhanHQ APIs, and reconnect here when it expires.
+                        </p>
+                      </div>
+                    </div>
+
+                    <h4 className="broker-section-title">Connection Details</h4>
+                    <div className="form-row">
+                      <label>
+                        Dhan Client ID <span className="required-dot">*</span>
+                        <input
+                          autoComplete="off"
+                          value={dhanDraft.clientId}
+                          onChange={(event) => setDhanDraft({ ...dhanDraft, clientId: event.target.value })}
+                          placeholder="From web.dhan.co"
+                        />
+                      </label>
+                      <label>
+                        Access Token <span className="required-dot">*</span>
+                        <input
+                          type="password"
+                          autoComplete="off"
+                          value={dhanDraft.accessToken}
+                          onChange={(event) => setDhanDraft({ ...dhanDraft, accessToken: event.target.value })}
+                          placeholder="Generated from Dhan Web"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mini-actions broker-actions">
+                      <button type="button" className="primary-btn" onClick={() => void handleDhanSave()}>
+                        <Link2 size={16} />
+                        {dhanConnected ? 'Update & Reconnect' : 'Connect'}
+                      </button>
+                      {dhanConnected && (
+                        <button type="button" className="danger-btn" onClick={() => void handleDhanForget()}>Forget Saved Credentials</button>
+                      )}
+                    </div>
+
+                    {dhanConnected && (
+                      <>
+                        <h4 className="broker-section-title">Sync Trades</h4>
+                        <div className="form-row">
+                          <label>
+                            Import into account
+                            <select value={dhanSyncAccountId} onChange={(event) => setDhanSyncAccountId(event.target.value)}>
+                              <option value="">Select an account…</option>
+                              {accountOptions.map((account) => (
+                                <option key={account.id} value={account.id}>{account.accountName}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {dhanSyncResult && (
+                          <p className={`broker-status-message ${dhanSyncResult.startsWith('Imported') || dhanSyncResult.startsWith('No trades') ? 'is-success' : 'is-danger'}`}>
+                            {dhanSyncResult}
+                          </p>
+                        )}
+                        <div className="mini-actions broker-actions">
+                          <button type="button" className="primary-btn" disabled={!dhanSyncAccountId || dhanSyncing} onClick={() => void handleDhanSync()}>
+                            {dhanSyncing ? <Loader2 size={16} className="spin-icon" /> : <RefreshCw size={16} />}
+                            {dhanSyncing ? 'Syncing…' : 'Sync Trades'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'broker' && openBrokerModal === 'zerodha' && (
+                <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
+                  <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
+                    <div className="broker-card-header">
+                      <div className="broker-card-heading">
+                        <div>
+                          <div className="broker-title-row">
+                            <h3>Zerodha</h3>
+                            <span className="broker-api-pill">Kite Connect</span>
+                          </div>
+                          <p>Import your executed trades from Zerodha. Requires a paid Kite Connect developer subscription.</p>
+                        </div>
+                      </div>
+                      <span className={`badge ${zerodhaAccessToken ? 'badge-closed' : zerodhaConnecting ? 'badge-open' : 'badge-sell'}`}>
+                        ● {zerodhaAccessToken ? 'Connected' : zerodhaConnecting ? 'Connecting…' : 'Disconnected'}
+                      </span>
+                    </div>
+
+                    <div className="security-note-panel">
+                      <Lock size={16} />
+                      <div>
+                        <strong>Secure &amp; Encrypted</strong>
+                        <p>
+                          Your API Key is stored on this device only. Zerodha's own login page handles your password — this
+                          app never sees it. The one secret this connection needs (the Kite Connect api_secret) lives only
+                          on the backend server, never in this page.
+                        </p>
+                      </div>
+                    </div>
+
+                    <h4 className="broker-section-title">Connection Details</h4>
+                    <div className="form-row">
+                      <label>
+                        API Key <span className="required-dot">*</span>
+                        <input
+                          autoComplete="off"
+                          value={zerodhaApiKey}
+                          onChange={(event) => setZerodhaApiKey(event.target.value)}
+                          placeholder="From Kite Connect developer console"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mini-actions broker-actions">
+                      {zerodhaAccessToken ? (
+                        <button type="button" className="secondary-btn" onClick={handleZerodhaDisconnect}>
+                          <Unlink size={16} />
+                          Disconnect
+                        </button>
+                      ) : (
+                        <button type="button" className="primary-btn" disabled={!zerodhaApiKey.trim() || zerodhaConnecting} onClick={() => void handleZerodhaConnect()}>
+                          <Link2 size={16} />
+                          Connect
+                        </button>
+                      )}
+                    </div>
+
+                    {zerodhaAccessToken && (
+                      <>
+                        <h4 className="broker-section-title">Sync Trades</h4>
+                        <div className="form-row">
+                          <label>
+                            Import into account
+                            <select value={zerodhaSyncAccountId} onChange={(event) => setZerodhaSyncAccountId(event.target.value)}>
+                              <option value="">Select an account…</option>
+                              {accountOptions.map((account) => (
+                                <option key={account.id} value={account.id}>{account.accountName}</option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                        {zerodhaSyncResult && (
+                          <p className={`broker-status-message ${zerodhaSyncResult.startsWith('Imported') || zerodhaSyncResult.startsWith('No trades') ? 'is-success' : 'is-danger'}`}>
+                            {zerodhaSyncResult}
+                          </p>
+                        )}
+                        <div className="mini-actions broker-actions">
+                          <button type="button" className="primary-btn" disabled={!zerodhaSyncAccountId || zerodhaSyncing} onClick={() => void handleZerodhaSync()}>
+                            {zerodhaSyncing ? <Loader2 size={16} className="spin-icon" /> : <RefreshCw size={16} />}
+                            {zerodhaSyncing ? 'Syncing…' : 'Sync Trades'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
 

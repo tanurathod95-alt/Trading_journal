@@ -68,6 +68,39 @@ def billing_status(
     )
 
 
+@router.get("/workspaces/{workspace_id}/payments", response_model=list[schemas.PaymentOut])
+def list_payments(
+    workspace_id: str, db: DBSession = Depends(get_db), user: models.User = Depends(get_current_user)
+) -> list[schemas.PaymentOut]:
+    """
+    Real billing history — every row here is a payment that was actually
+    verified (routers/billing.py's verify_payment or the payment.captured
+    webhook), so there's no path that puts an unpaid/failed attempt in this
+    table. Same ADMIN+ gate as /status: this is read-only workspace info.
+    """
+    require_workspace_member(db, workspace_id, user, min_role=models.WorkspaceRole.ADMIN)
+    subscription = db.scalar(select(models.Subscription).where(models.Subscription.workspace_id == workspace_id))
+    if subscription is None:
+        return []
+    payments = db.scalars(
+        select(models.Payment)
+        .where(models.Payment.subscription_id == subscription.id)
+        .order_by(models.Payment.created_at.desc())
+    ).all()
+    return [
+        schemas.PaymentOut(
+            id=p.id,
+            created_at=p.created_at,
+            plan_name=p.plan_name,
+            billing_cycle=p.billing_cycle,
+            amount_paise=p.amount_paise,
+            status=p.status,
+            razorpay_payment_id=p.razorpay_payment_id,
+        )
+        for p in payments
+    ]
+
+
 @router.post("/workspaces/{workspace_id}/checkout", response_model=schemas.CheckoutOut, status_code=201)
 def create_checkout(
     workspace_id: str,
@@ -187,6 +220,12 @@ def verify_payment(
                 razorpay_payment_id=payload.razorpay_payment_id,
                 razorpay_order_id=payload.razorpay_order_id,
                 amount_paise=amount_paise,
+                # Captured now, not read off `subscription` later — a future
+                # upgrade overwrites subscription.plan_name/billing_cycle in
+                # place, which would otherwise make every past payment look
+                # like it was for whatever the workspace's plan is today.
+                plan_name=subscription.plan_name,
+                billing_cycle=subscription.billing_cycle,
             )
         )
 
@@ -282,6 +321,8 @@ async def razorpay_webhook(request: Request, db: DBSession = Depends(get_db)) ->
                                 razorpay_payment_id=payment_id,
                                 razorpay_order_id=order_id,
                                 amount_paise=entity.get("amount", 0),
+                                plan_name=subscription.plan_name,
+                                billing_cycle=subscription.billing_cycle,
                             )
                         )
                     subscription.status = models.SubscriptionStatus.ACTIVE

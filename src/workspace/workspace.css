@@ -636,6 +636,7 @@
   right: 0;
   left: auto;
   min-width: 240px;
+  max-width: calc(100vw - 20px);
 }
 
 .ws-user-dropdown-header {
@@ -779,6 +780,16 @@
   animation: ws-dropdown-in 0.12s ease;
 }
 
+.ws-billing-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-6, 40px) var(--space-5, 24px) 48px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 .ws-modal-card {
   width: 100%;
   max-width: 640px;
@@ -806,6 +817,460 @@
   margin: 0 0 2px;
   font-size: 1.1rem;
   color: var(--text);
+}
+
+/* ---- Billing page header + summary band ---- */
+
+.ws-billing-header {
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.ws-billing-header-text {
+  flex: 1;
+}
+
+.ws-billing-header .ws-close-btn {
+  margin-left: auto;
+}
+
+.ws-billing-header-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #eef1f6;
+  color: #334155;
+  flex-shrink: 0;
+}
+
+.ws-billing-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4, 20px);
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.ws-billing-summary-plan {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ws-billing-crown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.ws-billing-summary-label {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #94a3b8;
+}
+
+.ws-billing-summary-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ws-billing-plan-name {
+  font-size: 1.1rem;
+  color: var(--text);
+}
+
+.ws-billing-status-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.ws-billing-status-pill.active {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.ws-billing-summary-sub {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.ws-billing-divider {
+  width: 1px;
+  align-self: stretch;
+  background: #e2e8f0;
+}
+
+.ws-billing-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ws-billing-summary-stat strong {
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.ws-billing-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #eef1f6;
+  color: #334155;
+  flex-shrink: 0;
+  border: 1px solid #e2e8f0;
+}
+
+/* ---- Billing plan cards ---- */
+
+.ws-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4, 16px);
+}
+
+@media (max-width: 1100px) {
+  .ws-plan-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .ws-plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ws-plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+
+.ws-plan-card.current {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+.ws-plan-current-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.ws-plan-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-right: 60px;
+}
+
+.ws-plan-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.ws-plan-icon-free {
+  background: #eef1f6;
+  color: #475569;
+}
+
+.ws-plan-icon-pro {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.ws-plan-icon-premium {
+  background: #1e3a8a;
+  color: #bfdbfe;
+}
+
+.ws-plan-icon-business {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.ws-plan-name {
+  display: block;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.ws-plan-price {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ws-plan-features {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.ws-plan-features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.ws-plan-features li svg {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.ws-plan-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.ws-plan-note {
+  text-align: center;
+  padding: 9px 0;
+}
+
+/* ---- Billing history ---- */
+
+.ws-billing-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.ws-billing-history-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 40px 20px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: #94a3b8;
+}
+
+.ws-billing-history-empty svg {
+  color: #cbd5e1;
+  margin-bottom: 6px;
+}
+
+.ws-billing-history-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.ws-billing-history-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ws-billing-history-table th {
+  text-align: left;
+  padding: 10px 14px;
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
+}
+
+.ws-billing-history-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.ws-billing-history-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ws-billing-invoice-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ws-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: #475569;
+  cursor: pointer;
+}
+
+.ws-icon-btn:hover {
+  background: #f1f5f9;
+}
+
+.ws-billing-history-cards {
+  display: none;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ws-billing-history-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.ws-billing-history-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 640px) {
+  .ws-billing-history-table-wrap {
+    display: none;
+  }
+
+  .ws-billing-history-cards {
+    display: flex;
+  }
+
+  .ws-billing-page {
+    padding: 20px 16px 32px;
+    gap: 16px;
+  }
+
+  .ws-billing-header-text h2 {
+    font-size: 1.05rem;
+  }
+
+  .ws-billing-summary {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px 16px;
+    gap: 14px;
+  }
+
+  .ws-billing-divider {
+    width: auto;
+    height: 1px;
+    align-self: auto;
+  }
+
+  .ws-billing-manage-btn {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ws-billing-plans-header,
+  .ws-billing-history-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ws-billing-plans-header .ws-invite-row {
+    width: 100%;
+  }
+
+  .ws-billing-plans-header .ws-invite-row button {
+    flex: 1;
+  }
+
+  .ws-billing-history-header button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .ws-plan-card-head {
+    padding-right: 54px;
+  }
+}
+
+.ws-billing-plans-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.ws-billing-plans-title {
+  margin: 0 0 2px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ws-billing-manage-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .ws-close-btn {
@@ -968,14 +1433,43 @@
 }
 
 @media (max-width: 640px) {
+  /* Compact single-row navbar — was flex-direction:column before, which stacked
+     the workspace label and user menu onto two lines and doubled the bar's
+     height on every phone. Keep everything in one row and let the pieces
+     shrink instead. */
   .ws-bar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-wrap: nowrap;
+    min-height: 46px;
+    padding: 0 10px;
+    gap: 8px;
   }
 
-  .ws-bar-left,
+  .ws-bar-left {
+    gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
   .ws-bar-right {
-    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .ws-bar-workspace {
+    font-size: 12px;
+  }
+
+  /* The mode switcher text can be long ("← Modes · Personal Trading") — let it
+     truncate instead of forcing the bar to wrap or grow. */
+  .ws-bar .ws-nav-btn {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+  }
+
+  .ws-user-menu-name {
+    display: none;
   }
 
   .ws-account-grid {
@@ -986,18 +1480,31 @@
 /* Post-login mode picker + placeholders */
 .ws-mode-home,
 .ws-mode-placeholder {
-  max-width: 1040px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: var(--space-6, 40px) var(--space-5, 24px) 48px;
+  padding: var(--space-6, 56px) var(--space-5, 24px) 48px;
+  position: relative;
 }
 
 .ws-mode-home-heading {
-  margin-bottom: 36px;
+  position: relative;
+  z-index: 1;
+  margin-bottom: 32px;
+}
+
+.ws-mode-home-eyebrow {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #2563eb;
 }
 
 .ws-mode-home-heading h1 {
-  margin: 0 0 6px;
-  font-size: 28px;
+  margin: 0 0 8px;
+  font-size: 30px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #0f172a;
@@ -1005,43 +1512,147 @@
 
 .ws-mode-home-subtitle {
   margin: 0;
+  max-width: 560px;
   font-size: 14.5px;
+  line-height: 1.5;
   color: #64748b;
 }
 
+/* Purely decorative — low-opacity chart squiggle + soft blobs so the page
+   doesn't read as empty once the "Welcome" heading is gone. Never
+   interactive (pointer-events: none) and never carries real data. */
+.ws-mode-home-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ws-mode-home-bg::before,
+.ws-mode-home-bg::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+}
+
+.ws-mode-home-bg::before {
+  top: -120px;
+  left: -80px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.1), transparent 70%);
+}
+
+.ws-mode-home-bg::after {
+  bottom: -140px;
+  right: -100px;
+  width: 420px;
+  height: 420px;
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.08), transparent 70%);
+}
+
+.ws-mode-home-bg-chart {
+  position: absolute;
+  top: 8%;
+  right: 4%;
+  width: min(420px, 40%);
+  height: 140px;
+  opacity: 0.5;
+}
+
+.ws-mode-home-bg-chart polyline {
+  fill: none;
+  stroke: #2563eb;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.25;
+}
+
 .ws-mode-grid {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 22px;
+  width: 100%;
 }
 
 .ws-mode-card {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 16px;
   padding: 26px 24px;
   text-align: left;
   cursor: pointer;
   background: #ffffff;
   border: 1px solid #e7eaf0;
-  border-radius: 16px;
+  border-radius: 18px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   color: inherit;
   font: inherit;
-  transform: translateY(0) scale(1);
-  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 240ms ease, border-color 240ms ease,
-    opacity 240ms ease;
+  overflow: hidden;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
-.ws-mode-grid:hover .ws-mode-card:not(:hover) {
-  opacity: 0.68;
+.ws-mode-card-personal {
+  border-color: rgba(37, 99, 235, 0.16);
 }
 
-.ws-mode-card:hover {
-  border-color: rgba(79, 70, 229, 0.35);
-  box-shadow: 0 20px 32px -16px rgba(30, 41, 59, 0.22), 0 0 0 1px rgba(79, 70, 229, 0.08),
-    0 0 24px -4px rgba(79, 70, 229, 0.18);
+.ws-mode-card-view {
+  border-color: rgba(13, 148, 136, 0.16);
+}
+
+.ws-mode-card-business {
+  border-color: rgba(124, 58, 237, 0.16);
+}
+
+.ws-mode-card-personal:hover {
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 12px 28px -14px rgba(37, 99, 235, 0.28);
+}
+
+.ws-mode-card-view:hover {
+  border-color: rgba(13, 148, 136, 0.45);
+  box-shadow: 0 12px 28px -14px rgba(13, 148, 136, 0.28);
+}
+
+.ws-mode-card-business:hover {
+  border-color: rgba(124, 58, 237, 0.45);
+  box-shadow: 0 12px 28px -14px rgba(124, 58, 237, 0.28);
+}
+
+/* Elegant curved decorative shapes in the bottom-right corner, tinted per card below —
+   two overlapping soft circles rather than a single flat blob, for a layered look. */
+.ws-mode-card::before,
+.ws-mode-card::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.ws-mode-card::after {
+  inset: auto -35% -45% auto;
+  width: 65%;
+  height: 65%;
+  opacity: 0.6;
+}
+
+.ws-mode-card::before {
+  inset: auto -15% -25% auto;
+  width: 38%;
+  height: 38%;
+  opacity: 0.5;
+}
+
+.ws-mode-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .ws-mode-card-icon {
@@ -1049,16 +1660,11 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
   background: rgba(79, 70, 229, 0.1);
   color: #4f46e5;
-  transition: transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 240ms ease;
-}
-
-.ws-mode-card:hover .ws-mode-card-icon {
-  transform: scale(1.08);
 }
 
 .ws-mode-card-personal .ws-mode-card-icon {
@@ -1072,50 +1678,131 @@
 }
 
 .ws-mode-card-business .ws-mode-card-icon {
-  background: rgba(79, 70, 229, 0.1);
-  color: #4f46e5;
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+}
+
+.ws-mode-card-personal::after {
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.1), transparent 72%);
+}
+
+.ws-mode-card-personal::before {
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.14), transparent 72%);
+}
+
+.ws-mode-card-view::after {
+  background: radial-gradient(circle, rgba(13, 148, 136, 0.1), transparent 72%);
+}
+
+.ws-mode-card-view::before {
+  background: radial-gradient(circle, rgba(13, 148, 136, 0.14), transparent 72%);
+}
+
+.ws-mode-card-business::after {
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.1), transparent 72%);
+}
+
+.ws-mode-card-business::before {
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.14), transparent 72%);
+}
+
+.ws-mode-card-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.ws-mode-card-personal .ws-mode-card-arrow {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.ws-mode-card-view .ws-mode-card-arrow {
+  background: rgba(13, 148, 136, 0.12);
+  color: #0d9488;
+}
+
+.ws-mode-card-business .ws-mode-card-arrow {
+  background: rgba(124, 58, 237, 0.12);
+  color: #7c3aed;
 }
 
 .ws-mode-card-body {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
-  padding-right: 20px;
 }
 
 .ws-mode-card-body strong {
-  font-size: 15.5px;
-  font-weight: 600;
+  font-size: 17px;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .ws-mode-card-desc {
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.5;
+  color: #64748b;
+  min-height: 2.6em;
+}
+
+.ws-mode-card-features {
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  margin: auto -24px -26px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid rgba(15, 23, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.ws-mode-card-personal .ws-mode-card-features {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.03), rgba(37, 99, 235, 0.07));
+}
+
+.ws-mode-card-view .ws-mode-card-features {
+  background: linear-gradient(180deg, rgba(13, 148, 136, 0.03), rgba(13, 148, 136, 0.07));
+}
+
+.ws-mode-card-business .ws-mode-card-features {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.03), rgba(124, 58, 237, 0.07));
+}
+
+.ws-mode-card-features li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
   color: #64748b;
 }
 
-.ws-mode-card-arrow {
-  position: absolute;
-  top: 24px;
-  right: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
+.ws-mode-card-features li svg {
+  flex-shrink: 0;
   color: #94a3b8;
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: opacity 220ms ease, transform 220ms ease, color 220ms ease;
 }
 
-.ws-mode-card:hover .ws-mode-card-arrow {
-  opacity: 1;
-  transform: translateX(0);
-  color: #4f46e5;
+.ws-mode-card-personal .ws-mode-card-features li svg {
+  color: #2563eb;
+}
+
+.ws-mode-card-view .ws-mode-card-features li svg {
+  color: #0d9488;
+}
+
+.ws-mode-card-business .ws-mode-card-features li svg {
+  color: #7c3aed;
 }
 
 .ws-mode-back {
@@ -1132,7 +1819,11 @@
 .ws-mode-screen {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8fafc 0%, #f3f5f9 100%);
-  overflow-x: hidden;
+  /* overflow-x: hidden (even alone) makes this a scroll container, which
+     breaks position: sticky on the sidebar inside it — the sidebar would
+     scroll away with the page instead of staying put. overflow-x: clip
+     still stops horizontal overflow without creating that scroll container. */
+  overflow-x: clip;
 }
 
 .ws-bar.ws-bar-light {
@@ -1201,6 +1892,52 @@
   padding: 24px 14px;
   background: #ffffff;
   border-right: 1px solid #e7eaf0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-sidebar-upgrade-card {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #eef2ff 0%, #eff6ff 100%);
+  border: 1px solid #dbeafe;
+}
+
+.ws-sidebar-upgrade-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4f46e5, #2563eb);
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.ws-sidebar-upgrade-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.ws-sidebar-upgrade-sub {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.ws-sidebar-upgrade-btn {
+  width: 100%;
+  justify-content: center;
+  font-size: 12.5px;
+  padding: 7px 0;
 }
 
 .ws-sidebar-brand {
@@ -1214,13 +1951,15 @@
   color: #0f172a;
 }
 
-.ws-sidebar-brand::before {
-  content: '';
+.ws-sidebar-brand-icon {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 26px;
   height: 26px;
   border-radius: 8px;
   background: linear-gradient(135deg, #4f46e5, #2563eb);
+  color: #ffffff;
   flex-shrink: 0;
 }
 
@@ -1260,32 +1999,112 @@
   font-weight: 600;
 }
 
+.ws-mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ws-bar-light .ws-mobile-menu-btn:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.ws-bar:not(.ws-bar-light) .ws-mobile-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ws-sidebar-mobile-close {
+  display: none;
+  margin-left: auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.ws-sidebar-mobile-backdrop {
+  display: none;
+}
+
 @media (max-width: 768px) {
-  .ws-mode-layout {
-    flex-direction: column;
+  .ws-mobile-menu-btn {
+    display: inline-flex;
   }
 
+  /* Hidden by default on mobile — becomes a slide-out drawer only while .mobile-open, toggled by the hamburger button in WorkspaceBar. This replaces the old always-visible horizontal nav bar that was eating vertical space on every mobile screen. */
   .ws-sidebar {
-    position: static;
-    flex-basis: auto;
-    width: 100%;
-    min-height: 0;
-    padding: 8px 12px;
-    border-right: none;
-    border-bottom: 1px solid #e7eaf0;
-  }
-
-  .ws-sidebar-brand {
     display: none;
   }
 
-  .ws-sidebar-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
+  .ws-sidebar.mobile-open {
+    display: flex;
+    position: fixed;
+    inset: 0 25% 0 0;
+    z-index: 90;
+    width: auto;
+    min-height: 100vh;
+    box-shadow: var(--shadow-lg);
+    animation: ws-modal-in 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
   }
 
-  .ws-sidebar-item {
-    width: auto;
+  .ws-sidebar.mobile-open .ws-sidebar-mobile-close {
+    display: inline-flex;
+  }
+
+  .ws-sidebar-mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 85;
+    background: rgba(15, 23, 42, 0.4);
+    animation: ws-fade-in 0.15s ease;
+  }
+
+  .ws-sidebar-upgrade-card {
+    display: none;
+  }
+
+  .ws-sidebar.mobile-open .ws-sidebar-upgrade-card {
+    display: flex;
+  }
+}
+
+@media (max-width: 1024px) {
+  /* Tablet: 2-up instead of cramming all 3 narrow columns into a smaller width. */
+  .ws-mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ws-mode-home-bg-chart {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  /* Phone: single column, full width. */
+  .ws-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ws-mode-home-heading h1 {
+    font-size: 24px;
+  }
+
+  .ws-mode-home-subtitle {
+    font-size: 13.5px;
   }
 }
 
@@ -1295,8 +2114,19 @@
     padding: 24px 16px 32px;
   }
 
-  .ws-mode-grid {
-    grid-template-columns: 1fr;
+  .ws-mode-card {
+    padding: 20px 18px;
+    gap: 12px;
+  }
+
+  .ws-mode-card-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ws-mode-card-arrow {
+    width: 28px;
+    height: 28px;
   }
 }
 

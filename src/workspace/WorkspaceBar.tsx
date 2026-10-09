@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell } from 'lucide-react'
+import { Bell, Menu } from 'lucide-react'
 import { AccountSwitcher } from './AccountSwitcher'
 import { InvitationsInbox } from './InvitationsInbox'
 import { ProfileModal } from './ProfileModal'
@@ -21,7 +21,17 @@ export function WorkspaceBar({
   mode = 'personal',
   onChangeMode,
   showNotificationBell = true,
-}: { mode?: BarMode; onChangeMode?: () => void; showNotificationBell?: boolean } = {}) {
+  onOpenMenu,
+  onBilling,
+}: {
+  mode?: BarMode
+  onChangeMode?: () => void
+  showNotificationBell?: boolean
+  /** Mobile-only hamburger trigger (left side) — when provided, a compact menu button is shown on small screens. */
+  onOpenMenu?: () => void
+  /** When provided, adds a "Billing" item to the user dropdown (only wired where a billing panel exists, e.g. the home mode screen). */
+  onBilling?: () => void
+} = {}) {
   const { me, currentWorkspace, logout, myInvitations, myPortfolioInvitations } = useWorkspaceAuth()
   const [showInvitations, setShowInvitations] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -35,7 +45,13 @@ export function WorkspaceBar({
   return (
     <div className={mode === 'home' || mode === 'business' ? 'ws-bar ws-bar-light' : 'ws-bar'}>
       <div className="ws-bar-left">
-        <span className="ws-bar-workspace">{currentWorkspace.name}</span>
+        {onOpenMenu && (
+          <button type="button" className="ws-mobile-menu-btn" aria-label="Open menu" onClick={onOpenMenu}>
+            <Menu size={19} />
+          </button>
+        )}
+        {/* Neutral, non-identifying label — never the workspace's own name, which could be a person's name (e.g. "nandani's Workspace"). */}
+        <span className="ws-bar-workspace">Trading Journal</span>
         {onChangeMode && (
           <button type="button" className="ws-nav-btn" onClick={onChangeMode}>
             ← Modes · {modeLabels[mode]}
@@ -59,6 +75,8 @@ export function WorkspaceBar({
           displayName={me.user.display_name}
           email={me.user.email}
           onProfile={() => setShowProfile(true)}
+          onMyWorkspace={onChangeMode}
+          onBilling={onBilling}
           onLogout={() => void logout()}
         />
       </div>

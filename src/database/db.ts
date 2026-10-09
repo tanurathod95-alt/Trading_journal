@@ -86,6 +86,13 @@ export class JournalDB extends Dexie {
     this.version(3).stores({
       accountLinks: 'localAccountId,backendAccountId',
     })
+    // Additive only — broker-sync dedup. `brokerTradeId`/`brokerExitTradeId`
+    // are new optional Trade fields (see src/types/index.ts); indexing them
+    // here only adds a lookup index, it doesn't touch any existing trade row.
+    this.version(4).stores({
+      trades:
+        'id,accountId,tradeDate,segment,scriptName,reason,side,status,entryPrice,exitPrice,updatedAt,brokerTradeId,brokerExitTradeId',
+    })
   }
 }
 
