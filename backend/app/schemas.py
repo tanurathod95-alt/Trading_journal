@@ -390,3 +390,7 @@ class ZerodhaExchangeTokenRequest(BaseModel):
 
 class ZerodhaTokenOut(BaseModel):
     access_token: str
+
+
+class DhanTradesRequest(BaseModel):
+    access_token: str

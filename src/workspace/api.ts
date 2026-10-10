@@ -371,6 +371,15 @@ export const workspaceApi = {
       body: JSON.stringify({ request_token: requestToken, api_key: apiKey }),
     }),
 
+  /** Dhan's API rejects cross-origin browser requests outright (confirmed via a CORS preflight
+   * test — not a missing-header oversight), so unlike the other three brokers this trades fetch
+   * has to be proxied through the backend, not called directly from the browser. */
+  getDhanTrades: (accessToken: string) =>
+    request<unknown[]>('/api/dhan/trades', {
+      method: 'POST',
+      body: JSON.stringify({ access_token: accessToken }),
+    }),
+
   createCheckout: (workspaceId: string, planName: string, billingCycle: 'MONTHLY' | 'QUARTERLY' | 'YEARLY') =>
     request<CheckoutOutApi>(`/api/billing/workspaces/${workspaceId}/checkout`, {
       method: 'POST',

@@ -7,7 +7,7 @@ from sqlalchemy import inspect, select, text
 from . import models  # noqa: F401 — imported so Base knows about them before create_all
 from .config import settings
 from .database import Base, SessionLocal, engine
-from .routers import accounts, auth, billing, broker, invitations, portfolio_invitations, portfolios, trades, upstox, workspaces, zerodha
+from .routers import accounts, auth, billing, broker, dhan, invitations, portfolio_invitations, portfolios, trades, upstox, workspaces, zerodha
 
 app = FastAPI(title="Trading Journal API", version="0.1.0")
 
@@ -32,6 +32,7 @@ app.include_router(portfolio_invitations.router)
 app.include_router(billing.router)
 app.include_router(upstox.router)
 app.include_router(zerodha.router)
+app.include_router(dhan.router)
 
 
 @app.on_event("startup")
