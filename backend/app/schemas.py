@@ -310,6 +310,16 @@ class VerifyPaymentRequest(BaseModel):
     razorpay_signature: str
 
 
+class PaymentOut(BaseModel):
+    id: str
+    created_at: dt.datetime
+    plan_name: str | None
+    billing_cycle: str | None
+    amount_paise: int
+    status: str
+    razorpay_payment_id: str
+
+
 class BrokerCredentialsUpsert(BaseModel):
     broker_name: str = Field(default="Angel One", max_length=60)
     api_key: str = Field(min_length=1, max_length=200)
@@ -364,3 +374,26 @@ class MyInvitationOut(BaseModel):
     invited_by_email: str
     created_at: dt.datetime
     expires_at: dt.datetime
+
+
+class UpstoxExchangeTokenRequest(BaseModel):
+    code: str
+    client_id: str
+    redirect_uri: str
+
+
+class UpstoxTokenOut(BaseModel):
+    access_token: str
+
+
+class ZerodhaExchangeTokenRequest(BaseModel):
+    request_token: str
+    api_key: str
+
+
+class ZerodhaTokenOut(BaseModel):
+    access_token: str
+
+
+class DhanTradesRequest(BaseModel):
+    access_token: str

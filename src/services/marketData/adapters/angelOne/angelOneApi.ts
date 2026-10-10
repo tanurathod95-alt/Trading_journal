@@ -13,6 +13,10 @@ const ROUTES = {
   marketData: '/rest/secure/angelbroking/market/v1/quote',
   ltpData: '/rest/secure/angelbroking/order/v1/getLtpData',
   logout: '/rest/secure/angelbroking/user/v1/logout',
+  // Confirmed against Angel One's own smartapi-javascript config/api.js
+  // ("get_tradebook") and smartapi-python's SmartConnect.tradeBook() — a
+  // plain GET, no params, current trading day's executed fills only.
+  tradeBook: '/rest/secure/angelbroking/order/v1/getTradeBook',
 } as const
 
 export interface AngelOneSession {
@@ -183,4 +187,53 @@ export async function getLtpData(
     low: Number(body.data?.low ?? 0),
     close: Number(body.data?.close ?? 0),
   }
+}
+
+/**
+ * Raw shape of one trade-book row. Field names are Angel One's documented
+ * lowercase convention (matching `clientcode`/`totp` etc. used elsewhere in
+ * this file) but are NOT confirmed against a live response in this repo —
+ * `getTradeBook` logs the first raw row once via console.debug so the
+ * caller/mapper can be checked against a real account before being trusted.
+ */
+export interface AngelOneTradeBookRow {
+  tradingsymbol: string
+  symboltoken: string
+  exchange: string
+  producttype: string
+  transactiontype: 'BUY' | 'SELL'
+  fillprice: number
+  fillsize: number
+  orderid: string
+  tradeid: string
+  filltime: string
+  exchtime?: string
+}
+
+let hasLoggedTradeBookShape = false
+
+export async function getTradeBook(session: AngelOneSession): Promise<AngelOneTradeBookRow[]> {
+  let response: Response
+  try {
+    response = await fetch(BASE_URL + ROUTES.tradeBook, {
+      method: 'GET',
+      headers: { ...baseHeaders(session.apiKey), Authorization: `Bearer ${session.jwtToken}` },
+    })
+  } catch {
+    throw new AngelOneApiError('Could not reach Angel One (network error or blocked by CORS).', 'network')
+  }
+
+  const body = await parseJsonOrThrow(response, 'data')
+
+  if (!response.ok || body?.status !== true) {
+    throw new AngelOneApiError(body?.message ?? 'Unable to load trade book', 'data')
+  }
+
+  const rows = (body.data ?? []) as AngelOneTradeBookRow[]
+  if (!hasLoggedTradeBookShape && rows.length > 0) {
+    // One-time diagnostic: confirm real field names before trusting the mapper in angelOneTradeSync.ts.
+    console.debug('[AngelOne] trade-book row shape (first row):', rows[0])
+    hasLoggedTradeBookShape = true
+  }
+  return rows
 }

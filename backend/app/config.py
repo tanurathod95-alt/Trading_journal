@@ -60,5 +60,18 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = "placeholder_secret"
     razorpay_webhook_secret: str = "placeholder_webhook_secret"
 
+    # Upstox OAuth2 client secret (broker trade-sync, Phase 2). The `client_id`
+    # is not secret and is entered client-side by the user in Settings; only
+    # the secret needs to live here, since Upstox's authorization-code token
+    # exchange requires it and it must never reach frontend JS. Blank default
+    # — set via backend/.env as JOURNAL_UPSTOX_CLIENT_SECRET.
+    upstox_client_secret: str = ""
+
+    # Zerodha Kite Connect checksum secret (broker trade-sync, Phase 4). Same
+    # shape as upstox_client_secret: api_key isn't secret and is entered
+    # client-side; only the api_secret used in the SHA-256 checksum needs to
+    # live here. Blank default — set via backend/.env as JOURNAL_ZERODHA_API_SECRET.
+    zerodha_api_secret: str = ""
+
 
 settings = Settings()

@@ -350,6 +350,12 @@ class Payment(Base):
     amount_paise: Mapped[int] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="captured")
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
+    # Captured at payment time, not read off Subscription later — Subscription
+    # is a single mutable row per workspace, overwritten on every upgrade, so
+    # without this a workspace that upgraded FREE->PRO->PREMIUM would show
+    # every historical payment as "PREMIUM" in billing history.
+    plan_name: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    billing_cycle: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
 
 class WebhookEvent(Base):

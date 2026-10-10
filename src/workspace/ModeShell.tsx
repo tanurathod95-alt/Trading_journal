@@ -1,24 +1,41 @@
 import { useState } from 'react'
 import App from '../App'
+import { BillingPage } from './BillingPage'
 import { BusinessMode } from './BusinessMode'
 import { ModeHome, type AppMode } from './ModeHome'
-import { ModeSidebar } from './ModeSidebar'
+import { ModeSidebar, type SidebarPanel } from './ModeSidebar'
 import { useWorkspaceAuth } from './WorkspaceAuthContext'
 import { WorkspaceBar } from './WorkspaceBar'
 
 /** Renders the post-login mode picker, then the chosen section. */
 export function ModeShell() {
   const [mode, setMode] = useState<AppMode | null>(null)
+  const [panel, setPanel] = useState<SidebarPanel>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const { accounts, accountsLoading } = useWorkspaceAuth()
 
   if (mode === null) {
     return (
       <div className="ws-mode-screen">
-        <WorkspaceBar mode="home" showNotificationBell={false} />
+        <WorkspaceBar
+          mode="home"
+          showNotificationBell={false}
+          onOpenMenu={() => setMobileNavOpen(true)}
+          onBilling={() => setPanel('billing')}
+        />
         <div className="ws-mode-layout">
-          <ModeSidebar />
+          <ModeSidebar
+            panel={panel}
+            onSelectPanel={setPanel}
+            mobileOpen={mobileNavOpen}
+            onCloseMobile={() => setMobileNavOpen(false)}
+          />
           <div className="ws-mode-main">
-            <ModeHome onSelect={setMode} />
+            {panel === 'billing' ? (
+              <BillingPage inline onClose={() => setPanel(null)} />
+            ) : (
+              <ModeHome onSelect={setMode} />
+            )}
           </div>
         </div>
       </div>

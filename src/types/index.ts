@@ -40,6 +40,16 @@ export interface Trade {
    * resolution when their chart is opened.
    */
   instrument?: MarketInstrument
+  /**
+   * Set only on trades created or closed by a broker sync (e.g. Angel One
+   * trade-book import). Stores the broker's own trade id for the fill that
+   * opened this trade, so a re-sync can detect "already imported" and skip
+   * it instead of creating a duplicate.
+   */
+  brokerTradeId?: string
+  /** Set when this trade's exit leg came from a broker-synced fill, separately from brokerTradeId (the entry fill) — both are checked for dedup. */
+  brokerExitTradeId?: string
+  source?: 'manual' | 'broker-sync'
 }
 
 export interface TradeDraft {

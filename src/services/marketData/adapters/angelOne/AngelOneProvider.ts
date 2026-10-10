@@ -112,6 +112,11 @@ export class AngelOneProvider implements MarketDataProvider {
     return this.session !== null
   }
 
+  /** Exposes the active session for callers outside market-data fetching (e.g. broker trade sync). */
+  getSession(): AngelOneSession | null {
+    return this.session
+  }
+
   private requireSession(): AngelOneSession {
     if (!this.session) {
       throw new Error('Angel One connection not configured')

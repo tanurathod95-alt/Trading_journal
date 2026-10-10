@@ -81,6 +81,16 @@ export interface BillingStatusApi {
   max_trading_accounts: number | null
 }
 
+export interface PaymentApi {
+  id: string
+  created_at: string
+  plan_name: string | null
+  billing_cycle: string | null
+  amount_paise: number
+  status: string
+  razorpay_payment_id: string
+}
+
 export interface CheckoutOutApi {
   order_id: string
   key_id: string
@@ -350,6 +360,35 @@ export const workspaceApi = {
   listPlanPricing: () => request<PlanPricingApi[]>('/api/billing/plans'),
 
   getBillingStatus: (workspaceId: string) => request<BillingStatusApi>(`/api/billing/workspaces/${workspaceId}/status`),
+
+  listBillingHistory: (workspaceId: string) => request<PaymentApi[]>(`/api/billing/workspaces/${workspaceId}/payments`),
+
+  /**
+   * Upstox OAuth's authorization-code exchange needs a client_secret, which must never sit in
+   * frontend JS — this is the one broker-sync call that goes through this app's own backend
+   * (as a thin, stateless proxy) rather than straight to the broker's API.
+   */
+  exchangeUpstoxToken: (code: string, clientId: string, redirectUri: string) =>
+    request<{ access_token: string }>('/api/upstox/exchange-token', {
+      method: 'POST',
+      body: JSON.stringify({ code, client_id: clientId, redirect_uri: redirectUri }),
+    }),
+
+  /** Mirrors exchangeUpstoxToken — Kite Connect's checksum needs api_secret, which must stay backend-only. */
+  exchangeZerodhaToken: (requestToken: string, apiKey: string) =>
+    request<{ access_token: string }>('/api/zerodha/exchange-token', {
+      method: 'POST',
+      body: JSON.stringify({ request_token: requestToken, api_key: apiKey }),
+    }),
+
+  /** Dhan's API rejects cross-origin browser requests outright (confirmed via a CORS preflight
+   * test — not a missing-header oversight), so unlike the other three brokers this trades fetch
+   * has to be proxied through the backend, not called directly from the browser. */
+  getDhanTrades: (accessToken: string) =>
+    request<unknown[]>('/api/dhan/trades', {
+      method: 'POST',
+      body: JSON.stringify({ access_token: accessToken }),
+    }),
 
   createCheckout: (workspaceId: string, planName: string, billingCycle: 'MONTHLY' | 'QUARTERLY' | 'YEARLY') =>
     request<CheckoutOutApi>(`/api/billing/workspaces/${workspaceId}/checkout`, {
