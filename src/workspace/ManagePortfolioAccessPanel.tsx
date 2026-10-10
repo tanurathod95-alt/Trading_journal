@@ -83,6 +83,7 @@ export function ManagePortfolioAccessPanel({ portfolio, onClose }: { portfolio: 
 
         {error && <p className="ws-error">{error}</p>}
 
+        <div className="ws-table-wrap">
         <table className="ws-members-table">
           <thead>
             <tr>
@@ -129,6 +130,7 @@ export function ManagePortfolioAccessPanel({ portfolio, onClose }: { portfolio: 
             ))}
           </tbody>
         </table>
+        </div>
 
         <form className="ws-add-account-form" onSubmit={(e) => void handleInvite(e)}>
           <div className="ws-invite-row">

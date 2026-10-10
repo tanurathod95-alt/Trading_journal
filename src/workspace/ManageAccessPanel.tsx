@@ -84,6 +84,7 @@ export function ManageAccessPanel({ account, onClose }: { account: TradingAccoun
 
         {error && <p className="ws-error">{error}</p>}
 
+        <div className="ws-table-wrap">
         <table className="ws-members-table">
           <thead>
             <tr>
@@ -130,6 +131,7 @@ export function ManageAccessPanel({ account, onClose }: { account: TradingAccoun
             ))}
           </tbody>
         </table>
+        </div>
 
         <form className="ws-add-account-form" onSubmit={(e) => void handleInvite(e)}>
           <div className="ws-invite-row">
