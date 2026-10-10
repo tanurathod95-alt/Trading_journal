@@ -33,7 +33,15 @@ export function WorkspaceBar({
   const pendingCount = myInvitations.length + myPortfolioInvitations.length
 
   return (
-    <div className={mode === 'home' || mode === 'business' ? 'ws-bar ws-bar-light' : 'ws-bar'}>
+    <div
+      className={
+        mode === 'business'
+          ? 'ws-bar ws-bar-light ws-bar-business'
+          : mode === 'home'
+            ? 'ws-bar ws-bar-light'
+            : 'ws-bar'
+      }
+    >
       <div className="ws-bar-left">
         <span className="ws-bar-workspace">{currentWorkspace.name}</span>
         {onChangeMode && (

@@ -32,7 +32,7 @@ function isBusinessAccount(account: TradingAccountApi): boolean {
  * form — opened only when the user asks for it (the "+ Create Business
  * Account" button below), never automatically on landing here.
  */
-export function BusinessMode() {
+export function BusinessMode({ onGoHome }: { onGoHome?: () => void }) {
   const { accounts, accountsLoading } = useWorkspaceAuth()
   const [panel, setPanel] = useState<'accounts' | 'portfolios' | 'billing' | 'settings' | null>(null)
   const [page, setPage] = useState<'dashboard' | 'users'>('dashboard')
@@ -62,6 +62,7 @@ export function BusinessMode() {
       <App
         key={businessAccounts.map((a) => a.id).join(',')}
         mode="business"
+        onGoHome={onGoHome}
         businessAccounts={businessAccounts}
         extraNav={[
           { key: 'accounts', label: 'Accounts', icon: LayoutGrid, onClick: () => setPanel('accounts') },

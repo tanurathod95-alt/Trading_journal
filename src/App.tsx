@@ -20,6 +20,7 @@ import {
   ListChecks,
   Loader2,
   Lock,
+  Mail,
   Menu,
   Moon,
   MoreVertical,
@@ -41,6 +42,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import './App.css'
+import mobileBrandIcon from './assets/mobile-brand-icon.png'
 import { db } from './database/db'
 import {
   deleteAttachmentsByTradeId,
@@ -58,6 +60,10 @@ import {
 } from './services/journalService'
 import type { Account, BackupBundle, Trade, TradeDraft, TradingSegment } from './types'
 import { ApiError, type TradingAccountApi } from './workspace/api'
+import { InvitationsInbox } from './workspace/InvitationsInbox'
+import { ProfileModal as WorkspaceProfileModal } from './workspace/ProfileModal'
+import { UserMenu } from './workspace/UserMenu'
+import { useWorkspaceAuth } from './workspace/WorkspaceAuthContext'
 import {
   deleteBusinessTrade,
   fetchBusinessAccountWithTrades,
@@ -277,6 +283,9 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mobileWorkspaceProfileOpen, setMobileWorkspaceProfileOpen] = useState(false)
+  const [mobileInvitationsOpen, setMobileInvitationsOpen] = useState(false)
+  const { me: workspaceMe, logout: workspaceLogout, myInvitations: workspaceInvitations, myPortfolioInvitations: workspacePortfolioInvitations } = useWorkspaceAuth()
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [exportScope, setExportScope] = useState<'all' | 'account' | 'view'>('view')
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf' | 'csv'>('excel')
@@ -727,7 +736,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     setQuickMode(false)
     const fallbackAccountId = tradeDraft.accountId || writableAccountOptions[0]?.id || ''
     setTradeDraft(toDraft(fallbackAccountId))
-    setMessage(mode === 'business' ? 'Trade saved.' : 'Trade saved to local database.')
+    setMessage('Trade saved.')
     await refreshAfterTradeAction()
   }
 
@@ -1323,10 +1332,30 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     <div className="app-shell">
       <header className="mobile-header">
         <div className="mobile-header-left">
-          <div className="brand-mark">TJ</div>
-          <span>Trading Journal</span>
+          <img src={mobileBrandIcon} alt="Trading Journal" className="mobile-brand-icon" />
+          <button type="button" className="icon-btn" aria-label="Open menu" onClick={() => setMobileMenuOpen(true)}>
+            <Menu size={18} />
+          </button>
         </div>
         <div className="mobile-header-right">
+          <button type="button" className="icon-btn" aria-label="Toggle theme" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
+            {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+          {mode === 'business' && (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={
+                workspaceInvitations.length + workspacePortfolioInvitations.length > 0
+                  ? `Invitations (${workspaceInvitations.length + workspacePortfolioInvitations.length} pending)`
+                  : 'Invitations'
+              }
+              onClick={() => setMobileInvitationsOpen(true)}
+            >
+              <Mail size={18} />
+              {workspaceInvitations.length + workspacePortfolioInvitations.length > 0 && <span className="notif-dot" />}
+            </button>
+          )}
           <div className="notifications-wrap">
             <button
               type="button"
@@ -1368,14 +1397,21 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               </div>
             )}
           </div>
-          <button type="button" className="icon-btn" aria-label="Toggle theme" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
-            {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
-          </button>
-          <button type="button" className="icon-btn" aria-label="Open menu" onClick={() => setMobileMenuOpen(true)}>
-            <Menu size={18} />
-          </button>
+          {mode === 'business' && workspaceMe && (
+            <div className="mobile-header-usermenu">
+              <UserMenu
+                displayName={workspaceMe.user.display_name}
+                email={workspaceMe.user.email}
+                onProfile={() => setMobileWorkspaceProfileOpen(true)}
+                onLogout={() => void workspaceLogout()}
+              />
+            </div>
+          )}
         </div>
       </header>
+
+      {mobileWorkspaceProfileOpen && <WorkspaceProfileModal onClose={() => setMobileWorkspaceProfileOpen(false)} />}
+      {mobileInvitationsOpen && <InvitationsInbox onClose={() => setMobileInvitationsOpen(false)} />}
 
       {mobileMenuOpen && (
         <div className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)}>
@@ -1385,6 +1421,12 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               <button type="button" className="close-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
             </div>
             <nav className="mobile-menu-nav">
+              {(mode === 'view' || mode === 'business') && onGoHome && (
+                <button type="button" className="nav-item sidebar-back-btn" onClick={() => { setMobileMenuOpen(false); onGoHome() }}>
+                  <ArrowLeft size={18} />
+                  <span className="nav-label">Modes</span>
+                </button>
+              )}
               {visibleNavItems.map((item) => {
                 const Icon = item.icon
                 return (
@@ -1535,7 +1577,11 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
 
       <div className="layout">
         <aside className="sidebar">
-          {onGoHome && (
+          {/* Business mode already has its own "← Modes · Business" button in
+              WorkspaceBar above (desktop/tablet) — showing this one too would
+              duplicate it. Personal/View have no WorkspaceBar, so they rely on
+              this one. */}
+          {mode !== 'business' && onGoHome && (
             <button type="button" className="nav-item sidebar-back-btn" onClick={onGoHome}>
               <ArrowLeft size={18} />
               <span className="nav-label">Modes</span>
@@ -1583,7 +1629,6 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           {message && (
             <div className="status-bar">
               <span>{message}</span>
-              <span className="offline-tag">Local Data</span>
             </div>
           )}
 
@@ -1612,6 +1657,22 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 )}
               </div>
 
+              {!readOnly && (
+                <div className="mobile-quick-actions">
+                  <span className="mobile-quick-actions-title">Quick Actions</span>
+                  <div className="mobile-quick-actions-row">
+                    <button type="button" className="quick-action-chip" onClick={() => openTradeForm()}>
+                      <Plus size={16} />
+                      Add Trade
+                    </button>
+                    <button type="button" className="quick-action-chip" onClick={() => openTradeForm(undefined, true)}>
+                      <Zap size={16} />
+                      Quick Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="card-grid">
                   <div className="skeleton skeleton-card" />
@@ -1621,7 +1682,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               ) : (
                 <div className="card-grid dashboard-cards">
-                  <div className="stat-card profit-card">
+                  <div className="stat-card profit-card netpl-card">
                     <div className="stat-card-head">
                       <span>Net P/L</span>
                       <div className="stat-icon"><TrendingUp size={16} /></div>
@@ -1629,10 +1690,15 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                     <strong>{getPnlLabel(summary.net)}</strong>
                     <small>{summary.netPercent >= 0 ? '↗' : '↘'} {summary.netPercent >= 0 ? '+' : ''}{summary.netPercent.toFixed(1)}%</small>
                   </div>
-                  <div className="stat-card blue-card">
+                  <div className="stat-card blue-card winrate-card">
                     <div className="stat-card-head">
                       <span>Win Rate</span>
-                      <div className="stat-icon"><Target size={16} /></div>
+                      <div
+                        className="winrate-ring"
+                        style={{ background: `conic-gradient(var(--primary) ${summary.winRate * 3.6}deg, var(--border) 0deg)` }}
+                      >
+                        <div className="winrate-ring-inner"><Target size={14} /></div>
+                      </div>
                     </div>
                     <strong>{summary.winRate.toFixed(1)}%</strong>
                     <small>{summary.winningTrades} Wins / {summary.total} Trades</small>
@@ -3283,15 +3349,21 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
         </div>
       )}
 
-      {!readOnly && (
-        <button type="button" className="mobile-fab" onClick={() => openTradeForm()} aria-label="Add trade">
-          <Plus size={18} />
-          Trade
-        </button>
-      )}
-
       <nav className="bottom-nav">
         {visibleBottomNavItems.map((item) => {
+          if (item.key === 'open-trades' && !readOnly) {
+            return (
+              <button
+                key={item.key}
+                type="button"
+                className="bottom-nav-item bottom-nav-fab"
+                onClick={() => openTradeForm()}
+                aria-label="Add trade"
+              >
+                <Plus size={22} />
+              </button>
+            )
+          }
           const Icon = item.icon
           return (
             <button
