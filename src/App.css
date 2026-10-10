@@ -613,6 +613,12 @@
   gap: var(--space-2);
 }
 
+/* Mobile-only alternative to .dashboard-actions, shown instead below the
+   stat cards at <=767px (see the mobile chrome media query below). */
+.mobile-quick-actions {
+  display: none;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1314,6 +1320,291 @@ tr.selected-row {
   color: var(--muted);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* ---- Calendar: month/week/day grid + sidebar ---- */
+
+.calendar-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.calendar-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.calendar-nav-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.calendar-period-label {
+  font-weight: 700;
+  font-size: 15px;
+  min-width: 150px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  margin-bottom: 6px;
+}
+
+.calendar-weekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 4px 0;
+}
+
+.calendar-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+}
+
+.calendar-week-grid {
+  grid-template-rows: 1fr;
+}
+
+.calendar-cell {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  min-height: 84px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.calendar-cell:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.calendar-cell.outside-month {
+  opacity: 0.4;
+}
+
+.calendar-cell.is-today {
+  border-color: var(--primary);
+}
+
+.calendar-cell.is-today .calendar-cell-date {
+  background: var(--primary);
+  color: white;
+}
+
+.calendar-cell-date {
+  font-weight: 700;
+  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+}
+
+.calendar-cell-detail {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.calendar-cell-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.calendar-cell-dot.profitable {
+  background: var(--success);
+}
+
+.calendar-cell-dot.loss {
+  background: var(--danger);
+}
+
+.calendar-cell-dot.flat {
+  background: var(--muted-soft);
+}
+
+.calendar-day-view {
+  padding: var(--space-3) 0;
+}
+
+.calendar-day-view-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  cursor: pointer;
+  text-align: left;
+}
+
+.calendar-day-view-summary strong {
+  font-size: 18px;
+}
+
+.calendar-day-view-summary em {
+  font-style: normal;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.calendar-day-view-summary span {
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.calendar-sidebar {
+  flex: 0 0 260px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.calendar-sidebar h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.calendar-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.calendar-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calendar-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.calendar-stat-row:first-of-type {
+  border-top: none;
+}
+
+.calendar-stat-row > div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.calendar-stat-row span {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.calendar-stat-row strong {
+  font-size: 15px;
+}
+
+.calendar-quick-actions-title {
+  margin: var(--space-2) 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.calendar-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .calendar-layout {
+    flex-direction: column;
+  }
+
+  .calendar-sidebar {
+    flex-basis: auto;
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .calendar-cell {
+    min-height: 56px;
+    padding: 6px;
+  }
+
+  .calendar-cell-detail {
+    display: none;
+  }
+
+  .calendar-period-label {
+    min-width: 0;
+    font-size: 13px;
+  }
 }
 
 /* ---------------------------------- */
@@ -2608,7 +2899,6 @@ tr.selected-row {
 .mobile-header,
 .mobile-menu-backdrop,
 .bottom-nav,
-.mobile-fab,
 .trade-card-list {
   display: none;
 }
@@ -2661,8 +2951,8 @@ tr.selected-row {
     position: sticky;
     top: 0;
     z-index: 30;
-    padding: 10px var(--space-3);
-    padding-top: max(10px, env(safe-area-inset-top));
+    padding: 8px var(--space-3);
+    padding-top: max(8px, env(safe-area-inset-top));
     background: var(--panel);
     border-bottom: 1px solid var(--border);
   }
@@ -2670,31 +2960,68 @@ tr.selected-row {
   .mobile-header-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-width: 0;
   }
 
-  .mobile-header-left .brand-mark {
-    width: 34px;
-    height: 34px;
-    font-size: 12px;
-    flex-shrink: 0;
+  .mobile-header-left .mobile-brand-icon {
+    transform: translateY(-2px);
   }
 
-  .mobile-header-left span {
-    font-weight: 600;
-    font-size: 14.5px;
+  .mobile-brand-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 700;
+    font-size: clamp(12px, 3.6vw, 15px);
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
+  .mobile-brand-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
   .mobile-header-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
+  }
+
+  /* Business mode's row has 4-5 icons (theme, invitations, notifications,
+     avatar) — shrink the touch targets a bit so "Trading Journal" on the
+     left has room to stay readable instead of being ellipsis-truncated. */
+  .mobile-header .icon-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+  }
+
+  /* Business mode's avatar/profile menu, folded into this single mobile
+     header instead of a second WorkspaceBar (see .ws-bar-business in
+     workspace.css) — just the avatar circle here, name hidden to save
+     width, same dropdown/logout behaviour as the desktop version. */
+  .mobile-header-usermenu .ws-user-menu-trigger {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+
+  .mobile-header-usermenu .ws-user-menu-name {
+    display: none;
+  }
+
+  .mobile-header-usermenu .ws-user-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
   }
 
   .mobile-header .notifications-panel {
@@ -2717,14 +3044,14 @@ tr.selected-row {
   }
 
   @keyframes mobile-menu-in {
-    from { transform: translateX(100%); }
+    from { transform: translateX(-100%); }
     to { transform: translateX(0); }
   }
 
   .mobile-menu {
     position: absolute;
     top: 0;
-    right: 0;
+    left: 0;
     bottom: 0;
     width: min(300px, 84vw);
     background: var(--panel);
@@ -2815,29 +3142,25 @@ tr.selected-row {
     background: var(--primary-soft);
   }
 
-  /* Floating action button */
-  .mobile-fab {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    position: fixed;
-    right: var(--space-3);
-    bottom: calc(64px + env(safe-area-inset-bottom) + 12px);
-    z-index: 30;
+  /* The bottom-nav's center "Add Trade" button — raised above the bar like
+     a FAB, replacing the Open Trades nav slot (Open Trades is reachable
+     from Dashboard/Journal instead on mobile). */
+  .bottom-nav-fab {
+    position: relative;
+    top: -14px;
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
     background: var(--primary);
     color: white;
-    border: 0;
-    border-radius: 999px;
-    padding: 13px 20px;
-    font-weight: 600;
-    font-size: 13.5px;
     box-shadow: 0 10px 24px rgba(37, 99, 235, 0.35);
-    cursor: pointer;
-    min-height: 48px;
+    flex: 0 0 48px !important;
+    min-height: 48px !important;
+    align-self: center;
   }
 
-  .mobile-fab:active {
-    transform: scale(0.97);
+  .bottom-nav-fab:active {
+    transform: scale(0.95);
   }
 
   /* Filters: full-width search + horizontally scrollable chip row */
@@ -3016,6 +3339,81 @@ tr.selected-row {
   .modal-footer {
     margin: var(--space-3) calc(var(--space-3) * -1) calc(var(--space-3) * -1);
     padding: var(--space-3);
+  }
+
+  /* Dashboard: feature Net P/L full-width, give Win Rate a progress ring,
+     and move Add Trade/Quick Add into a compact row below the stat cards
+     instead of the header (header keeps them on desktop/tablet). */
+  .dashboard-header-row .dashboard-actions {
+    display: none;
+  }
+
+  .winrate-card .stat-card-head {
+    align-items: flex-start;
+  }
+
+  .stat-card strong {
+    font-size: clamp(20px, 7vw, 28px);
+    white-space: nowrap;
+    width: 100%;
+    text-align: center;
+  }
+
+  .winrate-ring {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .winrate-ring-inner {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: var(--panel);
+    color: var(--primary);
+    display: grid;
+    place-items: center;
+  }
+
+  .mobile-quick-actions {
+    display: block;
+    margin-bottom: var(--space-3);
+  }
+
+  .mobile-quick-actions-title {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .mobile-quick-actions-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .quick-action-chip {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--primary-soft);
+    color: var(--primary-dark, var(--primary));
+    font-size: 11.5px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .quick-action-chip:active {
+    transform: scale(0.97);
   }
 }
 
@@ -3477,11 +3875,22 @@ tr.selected-row {
   .chart-toolbar-right {
     width: 100%;
     justify-content: flex-start;
+    /* Anchor dropdown panels to this full-width row instead of to each
+       trigger button. Indicators and Measure sit side by side here, so a
+       panel anchored to the Measure button's own (non-zero) left edge with
+       left:0 + min-width:200px would run past the right edge of a 320-375px
+       phone and get cut off by .chart-panel-body's overflow-x: hidden. */
+    position: relative;
+  }
+
+  .chart-dropdown {
+    position: static;
   }
 
   .chart-dropdown-panel {
-    right: auto;
     left: 0;
+    right: 0;
+    min-width: 0;
   }
 
   .chart-toolbar-btn {
@@ -3918,8 +4327,7 @@ tbody tr:hover {
 
 @media (max-width: 760px) {
   .dashboard-header-row {
-    background-size: 100% 100%;
-    padding: 12px 14px;
+    display: none;
   }
 }
 
@@ -4031,4 +4439,47 @@ tbody tr:hover {
 .sidebar-back-btn:hover {
   color: var(--primary);
   background: transparent;
+}
+
+/* ---- Desktop app-shell scroll lock ----
+   Sidebar must never move, not even via `position: sticky` (which turned
+   out to depend on ancestor scroll-container quirks and wasn't reliable
+   here) — so on desktop the whole shell stops scrolling as a page, and
+   only `.content` becomes its own independent scroll region. Scoped to
+   >900px only: below that the sidebar collapses to icon-only (900px) or
+   hides behind the mobile bottom-nav (767px), both of which already use
+   the ordinary whole-page scroll and are left untouched. */
+@media (min-width: 901px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .app-shell {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    flex: 0 0 auto;
+    position: static;
+  }
+
+  .layout {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .sidebar {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .content {
+    height: 100%;
+    overflow-y: auto;
+  }
 }

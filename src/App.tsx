@@ -7,6 +7,8 @@ import {
   CandlestickChart,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Download,
   Eye,
@@ -21,6 +23,7 @@ import {
   Loader2,
   RefreshCw,
   Lock,
+  Mail,
   Menu,
   Moon,
   MoreVertical,
@@ -43,6 +46,7 @@ import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 import './App.css'
+import mobileBrandIcon from './assets/mobile-brand-icon.png'
 import { db } from './database/db'
 import {
   deleteAttachmentsByTradeId,
@@ -64,6 +68,10 @@ import {
 } from './services/journalService'
 import type { Account, BackupBundle, Trade, TradeDraft, TradingSegment } from './types'
 import { ApiError, type TradingAccountApi } from './workspace/api'
+import { InvitationsInbox } from './workspace/InvitationsInbox'
+import { ProfileModal as WorkspaceProfileModal } from './workspace/ProfileModal'
+import { UserMenu } from './workspace/UserMenu'
+import { useWorkspaceAuth } from './workspace/WorkspaceAuthContext'
 import {
   deleteBusinessTrade,
   fetchBusinessAccountWithTrades,
@@ -117,7 +125,7 @@ const navItems: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ 
   { key: 'open-trades', label: 'Open Trades', icon: NotebookPen },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
-  { key: 'accounts', label: 'Accounts', icon: Landmark },
+  { key: 'accounts', label: 'Broker', icon: Landmark },
   { key: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -342,9 +350,14 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [chartRange, setChartRange] = useState<'7D' | '30D' | '3M' | '1Y'>('30D')
+  const [calendarViewMode, setCalendarViewMode] = useState<'Month' | 'Week' | 'Day'>('Month')
+  const [calendarCursor, setCalendarCursor] = useState<Date>(() => new Date())
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [showArchived, setShowArchived] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mobileWorkspaceProfileOpen, setMobileWorkspaceProfileOpen] = useState(false)
+  const [mobileInvitationsOpen, setMobileInvitationsOpen] = useState(false)
+  const { me: workspaceMe, logout: workspaceLogout, myInvitations: workspaceInvitations, myPortfolioInvitations: workspacePortfolioInvitations } = useWorkspaceAuth()
   const [exportModalOpen, setExportModalOpen] = useState(false)
   const [exportScope, setExportScope] = useState<'all' | 'account' | 'view'>('view')
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf' | 'csv'>('excel')
@@ -421,10 +434,17 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [filters, setFilters] = useState<JournalFilters>(defaultJournalFilters)
 
   const loadState = async (): Promise<void> => {
-    // Personal mode: only the user's own (local) accounts. View mode: only
-    // accounts shared with the user as VIEWER, never their own.
-    const nextAccounts = isPersonal ? await getAccounts() : []
-    const nextTrades = isPersonal ? await getTrades() : []
+    // Personal mode: only the user's own (local) accounts, excluding any
+    // Business-type account — creating a Business account server-side also
+    // mirrors it into this same local Dexie table (see
+    // WorkspaceAuthContext.createAccount) so it can log trades, but it must
+    // only ever appear in Business mode, never bleed into Personal. View
+    // mode: only accounts shared with the user as VIEWER, never their own.
+    const allLocalAccounts = isPersonal ? await getAccounts() : []
+    const nextAccounts = allLocalAccounts.filter((a) => a.accountType.trim().toLowerCase() !== 'business')
+    const personalAccountIds = new Set(nextAccounts.map((a) => a.id))
+    const allLocalTrades = isPersonal ? await getTrades() : []
+    const nextTrades = allLocalTrades.filter((t) => personalAccountIds.has(t.accountId))
     const storedName = await getProfileName()
     let remote: { accounts: Account[]; trades: Trade[] } = { accounts: [], trades: [] }
     if (mode === 'view') {
@@ -874,7 +894,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     setQuickMode(false)
     const fallbackAccountId = tradeDraft.accountId || writableAccountOptions[0]?.id || ''
     setTradeDraft(toDraft(fallbackAccountId))
-    setMessage(mode === 'business' ? 'Trade saved.' : 'Trade saved to local database.')
+    setMessage('Trade saved.')
     await refreshAfterTradeAction()
   }
 
@@ -1473,6 +1493,109 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     return Array.from(map.entries()).sort(([left], [right]) => right.localeCompare(left))
   }, [visibleTrades])
 
+  const calendarDayMap = useMemo(() => new Map(calendarDays), [calendarDays])
+
+  const toISODate = (d: Date): string => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  const addDays = (d: Date, days: number): Date => {
+    const copy = new Date(d)
+    copy.setDate(copy.getDate() + days)
+    return copy
+  }
+
+  const calendarWeekDates = useMemo(() => {
+    const start = addDays(calendarCursor, -calendarCursor.getDay())
+    return Array.from({ length: 7 }, (_, i) => addDays(start, i))
+  }, [calendarCursor])
+
+  const calendarMonthWeeks = useMemo(() => {
+    const year = calendarCursor.getFullYear()
+    const month = calendarCursor.getMonth()
+    const firstOfMonth = new Date(year, month, 1)
+    const gridStart = addDays(firstOfMonth, -firstOfMonth.getDay())
+    const weeks: Date[][] = []
+    let cursor = gridStart
+    for (let week = 0; week < 6; week += 1) {
+      const row = Array.from({ length: 7 }, (_, i) => addDays(cursor, i))
+      weeks.push(row)
+      cursor = addDays(cursor, 7)
+    }
+    return weeks
+  }, [calendarCursor])
+
+  const calendarPeriodRange = useMemo((): [string, string] => {
+    if (calendarViewMode === 'Day') {
+      const iso = toISODate(calendarCursor)
+      return [iso, iso]
+    }
+    if (calendarViewMode === 'Week') {
+      return [toISODate(calendarWeekDates[0]), toISODate(calendarWeekDates[6])]
+    }
+    const year = calendarCursor.getFullYear()
+    const month = calendarCursor.getMonth()
+    const lastOfMonth = new Date(year, month + 1, 0)
+    return [toISODate(new Date(year, month, 1)), toISODate(lastOfMonth)]
+  }, [calendarViewMode, calendarCursor, calendarWeekDates])
+
+  const calendarPeriodTrades = useMemo(() => {
+    const [start, end] = calendarPeriodRange
+    return visibleTrades.filter((trade) => trade.tradeDate >= start && trade.tradeDate <= end)
+  }, [visibleTrades, calendarPeriodRange])
+
+  const calendarPeriodStats = useMemo(() => {
+    const closed = calendarPeriodTrades.filter((trade) => trade.status === 'CLOSED')
+    const wins = closed.filter((trade) => trade.netPnl > 0)
+    const net = calendarPeriodTrades.reduce((sum, trade) => sum + trade.netPnl, 0)
+    return {
+      total: calendarPeriodTrades.length,
+      net,
+      winRate: closed.length ? (wins.length / closed.length) * 100 : 0,
+    }
+  }, [calendarPeriodTrades])
+
+  const calendarPeriodLabel = useMemo(() => {
+    if (calendarViewMode === 'Day') {
+      return calendarCursor.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    }
+    if (calendarViewMode === 'Week') {
+      const start = calendarWeekDates[0]
+      const end = calendarWeekDates[6]
+      const sameMonth = start.getMonth() === end.getMonth()
+      const startLabel = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const endLabel = end.toLocaleDateString('en-US', sameMonth ? { day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })
+      return `${startLabel} – ${endLabel}`
+    }
+    return calendarCursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  }, [calendarViewMode, calendarCursor, calendarWeekDates])
+
+  const calendarGoPrev = (): void => {
+    setCalendarCursor((current) => {
+      if (calendarViewMode === 'Day') return addDays(current, -1)
+      if (calendarViewMode === 'Week') return addDays(current, -7)
+      return new Date(current.getFullYear(), current.getMonth() - 1, 1)
+    })
+  }
+
+  const calendarGoNext = (): void => {
+    setCalendarCursor((current) => {
+      if (calendarViewMode === 'Day') return addDays(current, 1)
+      if (calendarViewMode === 'Week') return addDays(current, 7)
+      return new Date(current.getFullYear(), current.getMonth() + 1, 1)
+    })
+  }
+
+  const calendarGoToday = (): void => setCalendarCursor(new Date())
+
+  const openDayInJournal = (iso: string): void => {
+    setFilters((current) => ({ ...current, startDate: iso, endDate: iso }))
+    setActiveTab('journal')
+  }
+
   const analyticsStats = useMemo(() => {
     const closedTrades = visibleTrades.filter((trade) => trade.status === 'CLOSED')
     const wins = closedTrades.filter((trade) => trade.netPnl > 0)
@@ -1548,10 +1671,31 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     <div className="app-shell">
       <header className="mobile-header">
         <div className="mobile-header-left">
-          <div className="brand-mark">TJ</div>
-          <span>Trading Journal</span>
+          <button type="button" className="icon-btn" aria-label="Open menu" onClick={() => setMobileMenuOpen(true)}>
+            <Menu size={18} />
+          </button>
+          <img src={mobileBrandIcon} alt="" className="mobile-brand-icon" />
+          <span className="mobile-brand-name">Trading Journal</span>
         </div>
         <div className="mobile-header-right">
+          <button type="button" className="icon-btn" aria-label="Toggle theme" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
+            {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+          {mode === 'business' && (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={
+                workspaceInvitations.length + workspacePortfolioInvitations.length > 0
+                  ? `Invitations (${workspaceInvitations.length + workspacePortfolioInvitations.length} pending)`
+                  : 'Invitations'
+              }
+              onClick={() => setMobileInvitationsOpen(true)}
+            >
+              <Mail size={18} />
+              {workspaceInvitations.length + workspacePortfolioInvitations.length > 0 && <span className="notif-dot" />}
+            </button>
+          )}
           <div className="notifications-wrap">
             <button
               type="button"
@@ -1593,14 +1737,21 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               </div>
             )}
           </div>
-          <button type="button" className="icon-btn" aria-label="Toggle theme" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
-            {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
-          </button>
-          <button type="button" className="icon-btn" aria-label="Open menu" onClick={() => setMobileMenuOpen(true)}>
-            <Menu size={18} />
-          </button>
+          {workspaceMe && (
+            <div className="mobile-header-usermenu">
+              <UserMenu
+                displayName={workspaceMe.user.display_name}
+                email={workspaceMe.user.email}
+                onProfile={() => setMobileWorkspaceProfileOpen(true)}
+                onLogout={() => void workspaceLogout()}
+              />
+            </div>
+          )}
         </div>
       </header>
+
+      {mobileWorkspaceProfileOpen && <WorkspaceProfileModal onClose={() => setMobileWorkspaceProfileOpen(false)} />}
+      {mobileInvitationsOpen && <InvitationsInbox onClose={() => setMobileInvitationsOpen(false)} />}
 
       {mobileMenuOpen && (
         <div className="mobile-menu-backdrop" onClick={() => setMobileMenuOpen(false)}>
@@ -1610,6 +1761,12 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               <button type="button" className="close-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
             </div>
             <nav className="mobile-menu-nav">
+              {onGoHome && (
+                <button type="button" className="nav-item sidebar-back-btn" onClick={() => { setMobileMenuOpen(false); onGoHome() }}>
+                  <ArrowLeft size={18} />
+                  <span className="nav-label">Modes</span>
+                </button>
+              )}
               {visibleNavItems.map((item) => renderNavItem(item, () => { onTabSelect?.(); setMobileMenuOpen(false) }))}
               {extraNav.map((item) => {
                 const Icon = item.icon
@@ -1737,17 +1894,30 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           <button type="button" className="icon-btn" aria-label="Toggle theme" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
             {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
-          <div className="profile-inline" title={profileName || 'Set your name'}>
-            <div className="profile-avatar">
-              {getInitials(profileName) || <User size={16} />}
+          {workspaceMe ? (
+            <UserMenu
+              displayName={workspaceMe.user.display_name}
+              email={workspaceMe.user.email}
+              onProfile={() => setMobileWorkspaceProfileOpen(true)}
+              onLogout={() => void workspaceLogout()}
+            />
+          ) : (
+            <div className="profile-inline" title={profileName || 'Set your name'}>
+              <div className="profile-avatar">
+                {getInitials(profileName) || <User size={16} />}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </header>
 
       <div className="layout">
         <aside className="sidebar">
-          {onGoHome && (
+          {/* Business mode already has its own "← Modes · Business" button in
+              WorkspaceBar above (desktop/tablet) — showing this one too would
+              duplicate it. Personal/View have no WorkspaceBar, so they rely on
+              this one. */}
+          {mode !== 'business' && onGoHome && (
             <button type="button" className="nav-item sidebar-back-btn" onClick={onGoHome}>
               <ArrowLeft size={18} />
               <span className="nav-label">Modes</span>
@@ -1782,7 +1952,6 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           {message && (
             <div className="status-bar">
               <span>{message}</span>
-              <span className="offline-tag">Local Data</span>
             </div>
           )}
 
@@ -1811,6 +1980,22 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 )}
               </div>
 
+              {!readOnly && (
+                <div className="mobile-quick-actions">
+                  <span className="mobile-quick-actions-title">Quick Actions</span>
+                  <div className="mobile-quick-actions-row">
+                    <button type="button" className="quick-action-chip" onClick={() => openTradeForm()}>
+                      <Plus size={16} />
+                      Add Trade
+                    </button>
+                    <button type="button" className="quick-action-chip" onClick={() => openTradeForm(undefined, true)}>
+                      <Zap size={16} />
+                      Quick Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="card-grid">
                   <div className="skeleton skeleton-card" />
@@ -1820,7 +2005,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               ) : (
                 <div className="card-grid dashboard-cards">
-                  <div className="stat-card profit-card">
+                  <div className="stat-card profit-card netpl-card">
                     <div className="stat-card-head">
                       <span>Net P/L</span>
                       <div className="stat-icon"><TrendingUp size={16} /></div>
@@ -1828,10 +2013,15 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                     <strong>{getPnlLabel(summary.net)}</strong>
                     <small>{summary.netPercent >= 0 ? '↗' : '↘'} {summary.netPercent >= 0 ? '+' : ''}{summary.netPercent.toFixed(1)}%</small>
                   </div>
-                  <div className="stat-card blue-card">
+                  <div className="stat-card blue-card winrate-card">
                     <div className="stat-card-head">
                       <span>Win Rate</span>
-                      <div className="stat-icon"><Target size={16} /></div>
+                      <div
+                        className="winrate-ring"
+                        style={{ background: `conic-gradient(var(--primary) ${summary.winRate * 3.6}deg, var(--border) 0deg)` }}
+                      >
+                        <div className="winrate-ring-inner"><Target size={14} /></div>
+                      </div>
                     </div>
                     <strong>{summary.winRate.toFixed(1)}%</strong>
                     <small>{summary.winningTrades} Wins / {summary.total} Trades</small>
@@ -2367,42 +2557,154 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           )}
 
           {shownTab === 'calendar' && (
-            <section className="panel">
+            <section className="panel calendar-panel">
               <div className="page-header-row">
                 <div>
                   <h2>Calendar</h2>
-                  <p>Daily trading activity and P/L, at a glance.</p>
+                  <p>Track your trading activity, P/L and performance by date.</p>
                 </div>
               </div>
 
-              {calendarDays.length === 0 ? (
-                <div className="empty-state">
-                  <div className="empty-state-icon"><CalendarDays size={22} /></div>
-                  <h3>No trades yet</h3>
-                  <p>Trades will appear here once you start journaling.</p>
-                  {!readOnly && (
-                    <button type="button" className="primary-btn" onClick={() => openTradeForm()}>
-                      <Plus size={18} />
-                      Add Trade
-                    </button>
+              <div className="calendar-layout">
+                <div className="calendar-main">
+                  <div className="calendar-toolbar">
+                    <div className="calendar-nav">
+                      <button type="button" className="calendar-nav-btn" onClick={calendarGoPrev} aria-label="Previous">
+                        <ChevronLeft size={16} />
+                      </button>
+                      <button type="button" className="calendar-nav-btn" onClick={calendarGoToday} aria-label="Today">
+                        <CalendarDays size={16} />
+                      </button>
+                      <span className="calendar-period-label">{calendarPeriodLabel}</span>
+                      <button type="button" className="calendar-nav-btn" onClick={calendarGoNext} aria-label="Next">
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                    <div className="range-toggle">
+                      {(['Month', 'Week', 'Day'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={calendarViewMode === mode ? 'range-pill active' : 'range-pill'}
+                          onClick={() => setCalendarViewMode(mode)}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {calendarViewMode === 'Day' ? (
+                    <div className="calendar-day-view">
+                      {(() => {
+                        const iso = toISODate(calendarCursor)
+                        const dayTrades = calendarPeriodTrades
+                        return dayTrades.length === 0 ? (
+                          <div className="empty-state">
+                            <div className="empty-state-icon"><CalendarDays size={22} /></div>
+                            <h3>No trades on this day</h3>
+                            <p>Trades logged for this date will appear here.</p>
+                            {!readOnly && (
+                              <button type="button" className="primary-btn" onClick={() => openTradeForm()}>
+                                <Plus size={18} />
+                                Add Trade
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <button type="button" className="calendar-day-view-summary" onClick={() => openDayInJournal(iso)}>
+                            <strong>{dayTrades.length} {dayTrades.length === 1 ? 'trade' : 'trades'}</strong>
+                            <em className={calendarPeriodStats.net >= 0 ? 'profit' : 'loss'}>{getPnlLabel(calendarPeriodStats.net)}</em>
+                            <span>View in Journal →</span>
+                          </button>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="calendar-weekday-row">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                          <div key={d} className="calendar-weekday">{d}</div>
+                        ))}
+                      </div>
+                      <div className={calendarViewMode === 'Week' ? 'calendar-month-grid calendar-week-grid' : 'calendar-month-grid'}>
+                        {(calendarViewMode === 'Week' ? [calendarWeekDates] : calendarMonthWeeks).map((week, wi) =>
+                          week.map((date, di) => {
+                            const iso = toISODate(date)
+                            const payload = calendarDayMap.get(iso)
+                            const inMonth = calendarViewMode === 'Week' || date.getMonth() === calendarCursor.getMonth()
+                            const isToday = iso === toISODate(new Date())
+                            const dotClass = !payload ? '' : payload.pnl > 0 ? 'profitable' : payload.pnl < 0 ? 'loss' : 'flat'
+                            return (
+                              <button
+                                key={`${wi}-${di}`}
+                                type="button"
+                                className={`calendar-cell ${inMonth ? '' : 'outside-month'} ${isToday ? 'is-today' : ''}`}
+                                onClick={() => openDayInJournal(iso)}
+                              >
+                                <span className="calendar-cell-date">{date.getDate()}</span>
+                                {payload && (
+                                  <span className="calendar-cell-detail">
+                                    <span className={`calendar-cell-dot ${dotClass}`} />
+                                    {payload.count} {payload.count === 1 ? 'trade' : 'trades'}
+                                  </span>
+                                )}
+                              </button>
+                            )
+                          }),
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
-              ) : (
-                <div className="calendar-grid">
-                  {calendarDays.map(([date, payload]) => (
-                    <button
-                      key={date}
-                      type="button"
-                      className={`calendar-day ${payload.pnl > 0 ? 'day-positive' : payload.pnl < 0 ? 'day-negative' : ''}`}
-                      onClick={() => { setFilters((current) => ({ ...current, startDate: date, endDate: date })); setActiveTab('journal') }}
-                    >
-                      <span>{date}</span>
-                      <strong>{payload.count} {payload.count === 1 ? 'trade' : 'trades'}</strong>
-                      <em className={payload.pnl >= 0 ? 'profit' : 'loss'}>{getPnlLabel(payload.pnl)}</em>
-                    </button>
-                  ))}
-                </div>
-              )}
+
+                <aside className="calendar-sidebar">
+                  <h3>{calendarPeriodLabel}</h3>
+                  <div className="calendar-legend">
+                    <span><span className="calendar-cell-dot profitable" /> Profitable</span>
+                    <span><span className="calendar-cell-dot loss" /> Loss</span>
+                    <span><span className="calendar-cell-dot flat" /> No Trades</span>
+                  </div>
+
+                  <div className="calendar-stat-row">
+                    <div className="stat-icon"><ListChecks size={16} /></div>
+                    <div>
+                      <span>Total Trades</span>
+                      <strong>{calendarPeriodStats.total}</strong>
+                    </div>
+                  </div>
+                  <div className="calendar-stat-row">
+                    <div className="stat-icon"><TrendingUp size={16} /></div>
+                    <div>
+                      <span>Net P/L</span>
+                      <strong className={calendarPeriodStats.net >= 0 ? 'profit' : 'loss'}>{getPnlLabel(calendarPeriodStats.net)}</strong>
+                    </div>
+                  </div>
+                  <div className="calendar-stat-row">
+                    <div className="stat-icon"><Target size={16} /></div>
+                    <div>
+                      <span>Win Rate</span>
+                      <strong>{calendarPeriodStats.winRate.toFixed(1)}%</strong>
+                    </div>
+                  </div>
+
+                  {!readOnly && (
+                    <>
+                      <h4 className="calendar-quick-actions-title">Quick Actions</h4>
+                      <div className="calendar-quick-actions">
+                        <button type="button" className="primary-btn" onClick={() => openTradeForm()}>
+                          <Plus size={16} />
+                          Add Trade
+                        </button>
+                        <button type="button" className="secondary-btn" onClick={() => setActiveTab('analytics')}>
+                          <BarChart3 size={16} />
+                          View Reports
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </aside>
+              </div>
             </section>
           )}
 
@@ -3733,15 +4035,21 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
         </div>
       )}
 
-      {!readOnly && (
-        <button type="button" className="mobile-fab" onClick={() => openTradeForm()} aria-label="Add trade">
-          <Plus size={18} />
-          Trade
-        </button>
-      )}
-
       <nav className="bottom-nav">
         {visibleBottomNavItems.map((item) => {
+          if (item.key === 'open-trades' && !readOnly) {
+            return (
+              <button
+                key={item.key}
+                type="button"
+                className="bottom-nav-item bottom-nav-fab"
+                onClick={() => openTradeForm()}
+                aria-label="Add trade"
+              >
+                <Plus size={22} />
+              </button>
+            )
+          }
           const Icon = item.icon
           return (
             <button

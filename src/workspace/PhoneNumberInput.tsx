@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { COUNTRY_DIAL_CODES } from './countryCodes'
 
 /**
@@ -26,29 +27,45 @@ export function PhoneNumberInput({
   onDialChange: (dial: string) => void
   onNumberChange: (number: string) => void
 }) {
+  const [error, setError] = useState<string | null>(null)
+
+  function handleChange(raw: string): void {
+    const digits = raw.replace(/[^\d]/g, '')
+    if (digits.length > 10) {
+      setError('Phone number cannot be more than 10 digits.')
+      onNumberChange(digits.slice(0, 10))
+    } else {
+      setError(null)
+      onNumberChange(digits)
+    }
+  }
+
   return (
-    <div className="ws-phone-input">
-      <select
-        className="ws-phone-code"
-        value={dial}
-        onChange={(e) => onDialChange(e.target.value)}
-        aria-label="Country code"
-      >
-        {COUNTRY_DIAL_CODES.map((c) => (
-          <option key={c.iso} value={c.dial}>
-            {c.flag} {c.dial} {c.name}
-          </option>
-        ))}
-      </select>
-      <input
-        className="ws-phone-number"
-        type="tel"
-        inputMode="numeric"
-        value={number}
-        onChange={(e) => onNumberChange(e.target.value.replace(/[^\d]/g, ''))}
-        maxLength={15}
-        placeholder="98765 43210"
-      />
+    <div className="ws-phone-input-wrap">
+      <div className="ws-phone-input">
+        <select
+          className="ws-phone-code"
+          value={dial}
+          onChange={(e) => onDialChange(e.target.value)}
+          aria-label="Country code"
+        >
+          {COUNTRY_DIAL_CODES.map((c) => (
+            <option key={c.iso} value={c.dial}>
+              {c.flag} {c.dial} {c.name}
+            </option>
+          ))}
+        </select>
+        <input
+          className="ws-phone-number"
+          type="tel"
+          inputMode="numeric"
+          value={number}
+          onChange={(e) => handleChange(e.target.value)}
+          maxLength={10}
+          placeholder="98765 43210"
+        />
+      </div>
+      {error && <p className="ws-error small">{error}</p>}
     </div>
   )
 }

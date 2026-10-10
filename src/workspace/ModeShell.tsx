@@ -68,7 +68,7 @@ export function ModeShell() {
   return (
     <div className="ws-mode-screen">
       <WorkspaceBar mode="business" onChangeMode={goHome} />
-      <BusinessMode />
+      <BusinessMode onGoHome={goHome} />
     </div>
   )
 }
