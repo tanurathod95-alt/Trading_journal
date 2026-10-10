@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { PromoBanner } from '../PromoBanner'
 
 export function ForTraders() {
   return (
@@ -25,10 +25,8 @@ export function ForTraders() {
         </div>
       </div>
 
-      <div className="mk-final-cta" style={{ marginTop: 48 }}>
-        <h2>Bring your first account in today</h2>
-        <p>Free to start, no card required.</p>
-        <Link to="/app" className="mk-btn-primary">Start Free</Link>
+      <div style={{ marginTop: 48 }}>
+        <PromoBanner heading="Bring your first account in today" subtext="Free to start, no card required." />
       </div>
     </section>
   )

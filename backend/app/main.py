@@ -42,6 +42,7 @@ def on_startup() -> None:
     # there's a schema to migrate, not just create.
     Base.metadata.create_all(bind=engine)
     _ensure_payment_plan_columns()
+    _ensure_trading_account_columns()
 
 
 def _ensure_payment_plan_columns() -> None:
@@ -73,6 +74,22 @@ def _ensure_payment_plan_columns() -> None:
                 payment.billing_cycle = subscription.billing_cycle
                 db.add(payment)
         db.commit()
+
+
+def _ensure_trading_account_columns() -> None:
+    """
+    Same situation as _ensure_payment_plan_columns — `trading_accounts`
+    predates `contact_number` (added alongside the other dev's small-screen
+    polish commit this session merged in). Without this, inserting a new
+    trading account on an existing journal_dev.db crashes with "table
+    trading_accounts has no column named contact_number".
+    """
+    existing_columns = {col["name"] for col in inspect(engine).get_columns("trading_accounts")}
+    if "contact_number" in existing_columns:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE trading_accounts ADD COLUMN contact_number VARCHAR(32) DEFAULT ''"))
 
 
 @app.get("/api/health")

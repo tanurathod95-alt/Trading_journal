@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { PromoBanner } from '../PromoBanner'
 
 export function ForPortfolioManagers() {
   return (
@@ -49,10 +49,8 @@ export function ForPortfolioManagers() {
         </div>
       </div>
 
-      <div className="mk-final-cta" style={{ marginTop: 48 }}>
-        <h2>Bring your clients into one workspace</h2>
-        <p>Start free, upgrade as your client list grows.</p>
-        <Link to="/app" className="mk-btn-primary">Start Free</Link>
+      <div style={{ marginTop: 48 }}>
+        <PromoBanner heading="Bring your clients into one workspace" subtext="Start free, upgrade as your client list grows." />
       </div>
     </section>
   )

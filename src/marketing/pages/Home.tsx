@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { PromoBanner } from '../PromoBanner'
 
 export function Home() {
   return (
@@ -120,11 +121,10 @@ export function Home() {
         </p>
       </section>
 
-      <div className="mk-final-cta">
-        <h2>Ready to bring your trading into one place?</h2>
-        <p>Free to start. No card required for the Free plan.</p>
-        <Link to="/app" className="mk-btn-primary">Start Free</Link>
-      </div>
+      <PromoBanner
+        heading="Ready to bring your trading into one place?"
+        subtext="Free to start. No card required for the Free plan."
+      />
     </>
   )
 }
