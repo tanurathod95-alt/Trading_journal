@@ -3601,11 +3601,22 @@ tr.selected-row {
   .chart-toolbar-right {
     width: 100%;
     justify-content: flex-start;
+    /* Anchor dropdown panels to this full-width row instead of to each
+       trigger button. Indicators and Measure sit side by side here, so a
+       panel anchored to the Measure button's own (non-zero) left edge with
+       left:0 + min-width:200px would run past the right edge of a 320-375px
+       phone and get cut off by .chart-panel-body's overflow-x: hidden. */
+    position: relative;
+  }
+
+  .chart-dropdown {
+    position: static;
   }
 
   .chart-dropdown-panel {
-    right: auto;
     left: 0;
+    right: 0;
+    min-width: 0;
   }
 
   .chart-toolbar-btn {
