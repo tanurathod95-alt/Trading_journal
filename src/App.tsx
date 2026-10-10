@@ -1332,10 +1332,11 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     <div className="app-shell">
       <header className="mobile-header">
         <div className="mobile-header-left">
-          <img src={mobileBrandIcon} alt="Trading Journal" className="mobile-brand-icon" />
           <button type="button" className="icon-btn" aria-label="Open menu" onClick={() => setMobileMenuOpen(true)}>
             <Menu size={18} />
           </button>
+          <img src={mobileBrandIcon} alt="" className="mobile-brand-icon" />
+          <span className="mobile-brand-name">Trading Journal</span>
         </div>
         <div className="mobile-header-right">
           <button type="button" className="icon-btn" aria-label="Toggle theme" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
@@ -1397,7 +1398,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               </div>
             )}
           </div>
-          {mode === 'business' && workspaceMe && (
+          {workspaceMe && (
             <div className="mobile-header-usermenu">
               <UserMenu
                 displayName={workspaceMe.user.display_name}
@@ -1421,7 +1422,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               <button type="button" className="close-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
             </div>
             <nav className="mobile-menu-nav">
-              {(mode === 'view' || mode === 'business') && onGoHome && (
+              {onGoHome && (
                 <button type="button" className="nav-item sidebar-back-btn" onClick={() => { setMobileMenuOpen(false); onGoHome() }}>
                   <ArrowLeft size={18} />
                   <span className="nav-label">Modes</span>
@@ -1567,11 +1568,20 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           <button type="button" className="icon-btn" aria-label="Toggle theme" onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}>
             {theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
-          <div className="profile-inline" title={profileName || 'Set your name'}>
-            <div className="profile-avatar">
-              {getInitials(profileName) || <User size={16} />}
+          {workspaceMe ? (
+            <UserMenu
+              displayName={workspaceMe.user.display_name}
+              email={workspaceMe.user.email}
+              onProfile={() => setMobileWorkspaceProfileOpen(true)}
+              onLogout={() => void workspaceLogout()}
+            />
+          ) : (
+            <div className="profile-inline" title={profileName || 'Set your name'}>
+              <div className="profile-avatar">
+                {getInitials(profileName) || <User size={16} />}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </header>
 

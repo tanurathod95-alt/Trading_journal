@@ -2722,6 +2722,17 @@ tr.selected-row {
     transform: translateY(-2px);
   }
 
+  .mobile-brand-name {
+    flex: 1;
+    min-width: 0;
+    font-weight: 700;
+    font-size: clamp(12px, 3.6vw, 15px);
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .mobile-brand-icon {
     width: 32px;
     height: 32px;
@@ -2733,8 +2744,18 @@ tr.selected-row {
   .mobile-header-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     flex-shrink: 0;
+  }
+
+  /* Business mode's row has 4-5 icons (theme, invitations, notifications,
+     avatar) — shrink the touch targets a bit so "Trading Journal" on the
+     left has room to stay readable instead of being ellipsis-truncated. */
+  .mobile-header .icon-btn {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
   }
 
   /* Business mode's avatar/profile menu, folded into this single mobile
@@ -2777,14 +2798,14 @@ tr.selected-row {
   }
 
   @keyframes mobile-menu-in {
-    from { transform: translateX(100%); }
+    from { transform: translateX(-100%); }
     to { transform: translateX(0); }
   }
 
   .mobile-menu {
     position: absolute;
     top: 0;
-    right: 0;
+    left: 0;
     bottom: 0;
     width: min(300px, 84vw);
     background: var(--panel);
@@ -3083,6 +3104,13 @@ tr.selected-row {
 
   .winrate-card .stat-card-head {
     align-items: flex-start;
+  }
+
+  .stat-card strong {
+    font-size: clamp(20px, 7vw, 28px);
+    white-space: nowrap;
+    width: 100%;
+    text-align: center;
   }
 
   .winrate-ring {

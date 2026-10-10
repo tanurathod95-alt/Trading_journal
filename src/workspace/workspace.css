@@ -385,6 +385,12 @@
   min-height: 44px;
 }
 
+.ws-phone-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .ws-phone-input {
   display: flex;
   gap: 8px;
