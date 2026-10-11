@@ -4450,9 +4450,13 @@ tbody tr:hover {
    hides behind the mobile bottom-nav (767px), both of which already use
    the ordinary whole-page scroll and are left untouched. */
 @media (min-width: 901px) {
-  html,
-  body,
-  #root {
+  /* Scoped with :has() so this lock only engages on pages that actually
+     render .app-shell (the logged-in journal) — applying it unconditionally
+     to html/body/#root also broke scrolling on the public marketing site,
+     which has no .content scroll region to take over for it. */
+  html:has(.app-shell),
+  body:has(.app-shell),
+  #root:has(.app-shell) {
     height: 100%;
     overflow: hidden;
   }

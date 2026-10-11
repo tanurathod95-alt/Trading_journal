@@ -25,7 +25,8 @@
 }
 
 .mk-nav {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -69,9 +70,10 @@
 .mk-nav-collapsible {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   flex-wrap: wrap;
+  position: relative;
 }
 
 .mk-nav-brand {
@@ -102,6 +104,9 @@
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .mk-nav-links a {
@@ -765,6 +770,8 @@
   }
 
   .mk-nav-links {
+    position: static;
+    transform: none;
     flex-direction: column;
     align-items: flex-start;
     gap: 14px;
