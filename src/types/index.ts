@@ -49,7 +49,14 @@ export interface Trade {
   brokerTradeId?: string
   /** Set when this trade's exit leg came from a broker-synced fill, separately from brokerTradeId (the entry fill) — both are checked for dedup. */
   brokerExitTradeId?: string
-  source?: 'manual' | 'broker-sync'
+  source?: 'manual' | 'broker-sync' | 'csv-import'
+  /**
+   * Known broker charges for this round trip (brokerage, taxes, exchange fees), only ever set when
+   * the broker/CSV supplied reliable per-fill charges for BOTH legs. Never estimated.
+   */
+  charges?: number
+  /** 'known': netPnl = grossPnl - charges. 'unavailable': netPnl is just gross P&L and must not be presented as verified net. Absent on manual/legacy trades (unchanged behaviour). */
+  chargesStatus?: 'known' | 'unavailable'
 }
 
 export interface TradeDraft {

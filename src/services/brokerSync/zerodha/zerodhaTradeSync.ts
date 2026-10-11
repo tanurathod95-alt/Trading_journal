@@ -1,8 +1,6 @@
-import type { Trade, TradingSegment } from '../../../types'
-import { matchFills, type FillMatchResult, type NormalizedFill } from '../matchFills'
+import type { TradingSegment } from '../../../types'
+import { toBatch, type FillBatch } from '../normalizeFill'
 import { getTrades, type ZerodhaTradeRow } from './zerodhaApi'
-
-export type ZerodhaSyncResult = FillMatchResult
 
 /** Same inference Angel One needed — Kite's trade object doesn't carry a dedicated
  * instrument-type field either, only exchange + tradingsymbol. */
@@ -14,31 +12,26 @@ function inferSegment(exchange: string, tradingSymbol: string): TradingSegment {
   return 'FUTURES'
 }
 
-function toDateString(value: string | undefined): string {
-  if (value) {
-    const parsed = new Date(value)
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10)
-    }
-  }
-  return new Date().toISOString().slice(0, 10)
+export function normalizeZerodhaRows(rows: ZerodhaTradeRow[]): FillBatch {
+  return toBatch(
+    rows.map((row) => ({
+      fillId: row.trade_id,
+      symbol: row.tradingsymbol,
+      segment: inferSegment(row.exchange ?? '', row.tradingsymbol ?? ''),
+      side: row.transaction_type,
+      // Kite's docs name this field both `quantity` (samples) and `filled` (attribute table).
+      quantity: row.quantity ?? row.filled,
+      price: row.average_price,
+      timestamp: row.exchange_timestamp ?? row.fill_timestamp ?? row.order_timestamp,
+      orderId: row.order_id,
+      exchangeOrderId: row.exchange_order_id,
+      exchange: row.exchange,
+      product: row.product,
+    })),
+  )
 }
 
-function normalizeZerodhaRow(row: ZerodhaTradeRow): NormalizedFill {
-  // Docs disagree on the field name (quantity vs filled) — accept either, whichever is present.
-  const quantity = row.quantity ?? row.filled ?? 0
-  return {
-    fillId: row.trade_id,
-    symbol: row.tradingsymbol,
-    segment: inferSegment(row.exchange, row.tradingsymbol),
-    side: row.transaction_type,
-    quantity: Number(quantity) || 0,
-    price: Number(row.average_price) || 0,
-    date: toDateString(row.exchange_timestamp ?? row.fill_timestamp ?? row.order_timestamp),
-  }
-}
-
-export async function syncZerodhaTrades(apiKey: string, accessToken: string, accountId: string, existingTrades: Trade[]): Promise<ZerodhaSyncResult> {
-  const rows = await getTrades(apiKey, accessToken)
-  return matchFills(rows.map(normalizeZerodhaRow), accountId, existingTrades)
+/** Current trading day only — Kite's /trades is day-scoped. Older days need the Console tradebook CSV. */
+export async function fetchZerodhaFills(apiKey: string, accessToken: string): Promise<FillBatch> {
+  return normalizeZerodhaRows(await getTrades(apiKey, accessToken))
 }

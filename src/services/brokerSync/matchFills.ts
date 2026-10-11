@@ -10,8 +10,44 @@ export interface NormalizedFill {
   side: TradeSide
   quantity: number
   price: number
-  /** YYYY-MM-DD, the execution date. */
+  /** YYYY-MM-DD, the execution date (Asia/Kolkata). */
   date: string
+  orderId?: string
+  exchangeOrderId?: string
+  exchange?: string
+  product?: string
+  /** ISO timestamp with +05:30 offset, when the source gave a time. */
+  executedAt?: string
+  /** True when the source timestamp had no timezone and IST was assumed. */
+  timezoneAssumed?: boolean
+  /** Total charges for this fill; only set when the source actually provided them. */
+  charges?: number
+}
+
+/** A source row that could not be turned into a reliable fill (bad timestamp, missing id, invalid qty/price). It is NOT imported; it is surfaced for review. */
+export interface RejectedFill {
+  fillId: string
+  symbol: string
+  rawTimestamp?: string
+  reason: string
+}
+
+/** A broker fill that may be the same execution as, or the exit of, a MANUAL trade. The manual trade is never modified. */
+export interface PossibleMatch {
+  fillId: string
+  tradeId: string
+  symbol: string
+  message: string
+}
+
+export interface MatchOptions {
+  /** Provenance stamped on every new trade this run creates. */
+  source?: 'broker-sync' | 'csv-import'
+}
+
+/** Only trades this pipeline created itself may be updated by later fills; manual trades are read-only to it. */
+function isAutoManaged(trade: Trade): boolean {
+  return trade.source === 'broker-sync' || trade.source === 'csv-import'
 }
 
 export interface FillMatchResult {
@@ -23,6 +59,8 @@ export interface FillMatchResult {
   skipped: number
   /** How many of today's fills ended up as a still-open position (no opposite trade/fill to close against). */
   openLots: number
+  /** Fills that look like a manual trade's entry (duplicate) or exit (opposite side). Manual trades were left untouched. */
+  possibleMatches: PossibleMatch[]
 }
 
 function closeTrade(base: Trade, exitDate: string, exitPrice: number, exitFillId: string, now: string, quantity?: number): Trade {
@@ -68,8 +106,16 @@ interface SameDayLot {
  * existing trades before any of this — a fill already applied by a previous sync is skipped, so
  * re-running sync is always safe.
  */
-export function matchFills(fills: NormalizedFill[], accountId: string, existingTrades: Trade[]): FillMatchResult {
+export function matchFills(
+  fills: NormalizedFill[],
+  accountId: string,
+  existingTrades: Trade[],
+  options: MatchOptions = {},
+): FillMatchResult {
   const now = new Date().toISOString()
+  const source = options.source ?? 'broker-sync'
+  const possibleMatches: PossibleMatch[] = []
+  const manualOpenTrades = existingTrades.filter((t) => t.accountId === accountId && !isAutoManaged(t))
 
   const usedFillIds = new Set<string>()
   for (const t of existingTrades) {
@@ -85,7 +131,7 @@ export function matchFills(fills: NormalizedFill[], accountId: string, existingT
   // mutated locally as fills consume them within this one sync run.
   const openBySymbol = new Map<string, Trade[]>()
   for (const t of existingTrades) {
-    if (t.accountId !== accountId || t.status !== 'OPEN') continue
+    if (t.accountId !== accountId || t.status !== 'OPEN' || !isAutoManaged(t)) continue
     const key = `${t.scriptName}|${t.segment}`
     const list = openBySymbol.get(key) ?? []
     list.push({ ...t })
@@ -108,6 +154,27 @@ export function matchFills(fills: NormalizedFill[], accountId: string, existingT
     const key = `${fill.symbol}|${fill.segment}`
     const oppositeSide: TradeSide = fill.side === 'BUY' ? 'SELL' : 'BUY'
     let remainingQty = fill.quantity
+
+    // Manual trades are never closed/modified by broker fills. Flag anything that could be the
+    // same execution (same side/day/qty) or its exit (opposite side, still open) for review.
+    for (const manual of manualOpenTrades) {
+      if (manual.scriptName !== fill.symbol || manual.segment !== fill.segment) continue
+      if (manual.status === 'OPEN' && manual.side === oppositeSide) {
+        possibleMatches.push({
+          fillId: fill.fillId,
+          tradeId: manual.id,
+          symbol: fill.symbol,
+          message: `Broker ${fill.side} of ${fill.quantity} on ${fill.date} could be the exit of your manual ${manual.side} trade (${manual.tradeDate}). The manual trade was not changed.`,
+        })
+      } else if (manual.side === fill.side && manual.tradeDate === fill.date && manual.quantity === fill.quantity) {
+        possibleMatches.push({
+          fillId: fill.fillId,
+          tradeId: manual.id,
+          symbol: fill.symbol,
+          message: `Broker ${fill.side} of ${fill.quantity} on ${fill.date} may be the same execution as your manual trade. Both were kept; delete one if it is a duplicate.`,
+        })
+      }
+    }
 
     // Step 1 — close against an existing persisted OPEN trade (any earlier day), FIFO.
     const persistedQueue = openBySymbol.get(key) ?? []
@@ -170,7 +237,7 @@ export function matchFills(fills: NormalizedFill[], accountId: string, existingT
         createdAt: now,
         updatedAt: now,
         brokerTradeId: lot.fillId,
-        source: 'broker-sync',
+        source,
       }
       newTrades.push(closeTrade(entryTrade, fill.date, fill.price, fill.fillId, now))
       lot.qty -= matchQty
@@ -212,10 +279,10 @@ export function matchFills(fills: NormalizedFill[], accountId: string, existingT
         createdAt: now,
         updatedAt: now,
         brokerTradeId: lot.fillId,
-        source: 'broker-sync',
+        source,
       })
     }
   }
 
-  return { newTrades, updatedTrades, skipped, openLots }
+  return { newTrades, updatedTrades, skipped, openLots, possibleMatches }
 }

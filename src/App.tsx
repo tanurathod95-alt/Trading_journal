@@ -97,12 +97,15 @@ import type { MarketInstrument } from './components/TradingChart/chartTypes'
 import { fallbackInstrument, resolveInstrument, type AmbiguousResolution } from './services/marketData/instrumentResolver'
 import { marketDataService } from './services/marketData/MarketDataService'
 import { AngelOneProvider, angelOneProvider } from './services/marketData/adapters/angelOne/AngelOneProvider'
-import { syncAngelOneTrades } from './services/brokerSync/angelOneTradeSync'
+import { fetchAngelOneFills } from './services/brokerSync/angelOneTradeSync'
+import { hasCompletedApiSync, runFillSync } from './services/brokerSync/fillLedger'
+import { describeSyncOutcome } from './services/brokerSync/syncMessages'
+import { BrokerSyncPanel } from './components/BrokerSync/BrokerSyncPanel'
 import { buildUpstoxAuthorizationUrl, exchangeUpstoxCode } from './services/brokerSync/upstox/upstoxAuth'
-import { syncUpstoxTrades } from './services/brokerSync/upstox/upstoxTradeSync'
-import { syncDhanTrades } from './services/brokerSync/dhan/dhanTradeSync'
+import { fetchUpstoxFills } from './services/brokerSync/upstox/upstoxTradeSync'
+import { fetchDhanFills } from './services/brokerSync/dhan/dhanTradeSync'
 import { buildZerodhaLoginUrl, exchangeZerodhaRequestToken } from './services/brokerSync/zerodha/zerodhaAuth'
-import { syncZerodhaTrades } from './services/brokerSync/zerodha/zerodhaTradeSync'
+import { fetchZerodhaFills } from './services/brokerSync/zerodha/zerodhaTradeSync'
 import { clearCredentials as clearDhanCredentials, loadCredentials as loadDhanCredentials, saveCredentials as saveDhanCredentials } from './services/brokerSync/secureCredentialStore'
 import {
   clearAngelOneCredentials,
@@ -965,18 +968,9 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     setAngelOneSyncing(true)
     setAngelOneSyncResult(null)
     try {
-      const existingForAccount = trades.filter((t) => t.accountId === syncAccountId)
-      const result = await syncAngelOneTrades(session, syncAccountId, existingForAccount)
-      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
-        await saveTrade(trade)
-      }
-      const importedCount = result.newTrades.length + result.updatedTrades.length
-      setAngelOneSyncResult(
-        importedCount === 0 && result.skipped === 0
-          ? 'No trades found for today.'
-          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
-      )
-      localStorage.setItem(`angelone-last-sync-${syncAccountId}`, new Date().toISOString())
+      const batch = await fetchAngelOneFills(session)
+      const outcome = await runFillSync({ broker: 'angelone', accountId: syncAccountId, kind: 'api', ...batch })
+      setAngelOneSyncResult(describeSyncOutcome(outcome, 'No trades found for today.'))
       await refreshAfterTradeAction()
     } catch (error) {
       setAngelOneSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Angel One.')
@@ -1013,20 +1007,10 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     setUpstoxSyncing(true)
     setUpstoxSyncResult(null)
     try {
-      const lastSyncKey = `upstox-last-sync-${upstoxSyncAccountId}`
-      const isFirstSync = !localStorage.getItem(lastSyncKey)
-      const existingForAccount = trades.filter((t) => t.accountId === upstoxSyncAccountId)
-      const result = await syncUpstoxTrades(upstoxAccessToken, upstoxSyncAccountId, existingForAccount, isFirstSync)
-      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
-        await saveTrade(trade)
-      }
-      const importedCount = result.newTrades.length + result.updatedTrades.length
-      setUpstoxSyncResult(
-        importedCount === 0 && result.skipped === 0
-          ? 'No trades found.'
-          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'}${result.backfilled ? ' (including historical backfill)' : ''} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
-      )
-      localStorage.setItem(lastSyncKey, new Date().toISOString())
+      const isFirstSync = !(await hasCompletedApiSync('upstox', upstoxSyncAccountId))
+      const batch = await fetchUpstoxFills(upstoxAccessToken, isFirstSync)
+      const outcome = await runFillSync({ broker: 'upstox', accountId: upstoxSyncAccountId, kind: 'api', ...batch })
+      setUpstoxSyncResult(describeSyncOutcome(outcome, 'No trades found.'))
       await refreshAfterTradeAction()
     } catch (error) {
       setUpstoxSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Upstox.')
@@ -1068,17 +1052,10 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     setDhanSyncing(true)
     setDhanSyncResult(null)
     try {
-      const existingForAccount = trades.filter((t) => t.accountId === dhanSyncAccountId)
-      const result = await syncDhanTrades(dhanDraft.accessToken, dhanSyncAccountId, existingForAccount)
-      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
-        await saveTrade(trade)
-      }
-      const importedCount = result.newTrades.length + result.updatedTrades.length
-      setDhanSyncResult(
-        importedCount === 0 && result.skipped === 0
-          ? 'No trades found for today.'
-          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
-      )
+      const isFirstSync = !(await hasCompletedApiSync('dhan', dhanSyncAccountId))
+      const batch = await fetchDhanFills(dhanDraft.accessToken, isFirstSync)
+      const outcome = await runFillSync({ broker: 'dhan', accountId: dhanSyncAccountId, kind: 'api', ...batch })
+      setDhanSyncResult(describeSyncOutcome(outcome, 'No trades found.'))
       await refreshAfterTradeAction()
     } catch (error) {
       setDhanSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Dhan.')
@@ -1114,17 +1091,9 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     setZerodhaSyncing(true)
     setZerodhaSyncResult(null)
     try {
-      const existingForAccount = trades.filter((t) => t.accountId === zerodhaSyncAccountId)
-      const result = await syncZerodhaTrades(zerodhaApiKey, zerodhaAccessToken, zerodhaSyncAccountId, existingForAccount)
-      for (const trade of [...result.newTrades, ...result.updatedTrades]) {
-        await saveTrade(trade)
-      }
-      const importedCount = result.newTrades.length + result.updatedTrades.length
-      setZerodhaSyncResult(
-        importedCount === 0 && result.skipped === 0
-          ? 'No trades found for today.'
-          : `Imported ${importedCount} trade${importedCount === 1 ? '' : 's'} (${result.openLots} still open), skipped ${result.skipped} already-synced fill${result.skipped === 1 ? '' : 's'}.`,
-      )
+      const batch = await fetchZerodhaFills(zerodhaApiKey, zerodhaAccessToken)
+      const outcome = await runFillSync({ broker: 'zerodha', accountId: zerodhaSyncAccountId, kind: 'api', ...batch })
+      setZerodhaSyncResult(describeSyncOutcome(outcome, 'No trades found for today.'))
       await refreshAfterTradeAction()
     } catch (error) {
       setZerodhaSyncResult(error instanceof Error ? error.message : 'Could not sync trades from Zerodha.')
@@ -2455,7 +2424,21 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                     <div><strong>Exit Date</strong><span>{selectedTrade.exitDate || '-'}</span></div>
                     <div><strong>Exit Price</strong><span>{selectedTrade.exitPrice || '-'}</span></div>
                     <div><strong>Status</strong><span>{selectedTrade.status}</span></div>
-                    <div><strong>Net P/L</strong><span>{getPnlLabel(selectedTrade.netPnl)}</span></div>
+                    {selectedTrade.chargesStatus === 'known' ? (
+                      <>
+                        <div><strong>Gross P/L</strong><span>{getPnlLabel(selectedTrade.grossPnl)}</span></div>
+                        <div><strong>Charges</strong><span>{selectedTrade.charges}</span></div>
+                        <div><strong>Net P/L</strong><span>{getPnlLabel(selectedTrade.netPnl)}</span></div>
+                      </>
+                    ) : selectedTrade.chargesStatus === 'unavailable' ? (
+                      <>
+                        <div><strong>Gross P/L</strong><span>{getPnlLabel(selectedTrade.grossPnl)}</span></div>
+                        <div><strong>Charges</strong><span>Charges unavailable</span></div>
+                        <div><strong>Net P/L</strong><span>Unverified (charges unavailable)</span></div>
+                      </>
+                    ) : (
+                      <div><strong>Net P/L</strong><span>{getPnlLabel(selectedTrade.netPnl)}</span></div>
+                    )}
                     <div className="span-2"><strong>Notes</strong><span>{selectedTrade.notes || 'No notes added.'}</span></div>
                   </div>
 
@@ -3578,6 +3561,17 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                     )}
                   </div>
                 </div>
+              )}
+
+              {settingsTab === 'broker' && (
+                <BrokerSyncPanel
+                  accounts={accountOptions}
+                  connections={{
+                    zerodha: zerodhaAccessToken ? { apiKey: zerodhaApiKey, accessToken: zerodhaAccessToken } : null,
+                    dhanAccessToken: dhanConnected ? dhanDraft.accessToken : null,
+                  }}
+                  onTradesChanged={refreshAfterTradeAction}
+                />
               )}
 
               {settingsTab === 'data' && (

@@ -1,6 +1,7 @@
 /**
  * Thin REST client over Upstox's own API (direct browser->Upstox, no app backend involved —
  * the access_token already in hand is all that's needed, same shape as angelOneApi.ts).
+ * Read-only: only GET endpoints are used.
  */
 
 const BASE_URL = 'https://api.upstox.com/v2'
@@ -22,34 +23,34 @@ function authHeaders(accessToken: string): Record<string, string> {
 }
 
 /**
- * Raw shape of one trade row. Field names for the confirmed historical-trades endpoint are from
- * Upstox's official docs; the current-day trades endpoint's exact field names are not fully
- * confirmed in this pass — `getTodayTrades` logs the first raw row once via console.debug so the
- * mapper (upstoxTradeSync.ts) can be checked against a real response before being trusted, same
- * honest-about-uncertainty approach as Angel One's getTradeBook.
+ * Raw shape of one trade row. Two different endpoints, two different shapes (official docs):
+ *  - today (`/order/trades/get-trades-for-day`): `average_price`, `exchange_timestamp`/`order_timestamp`,
+ *    `trading_symbol`/`tradingsymbol`, `exchange`, `product` — no `trade_date`, no `price`.
+ *  - historical (`/charges/historical-trades`): `price`, `trade_date`, `symbol`/`scrip_name`,
+ *    `segment`, `option_type`, `quantity`, `amount`.
  */
 export interface UpstoxTradeRow {
   trade_id: string
   order_id?: string
   exchange: string
-  segment: string
-  symbol: string
+  segment?: string
+  symbol?: string
+  trading_symbol?: string
+  tradingsymbol?: string
   scrip_name?: string
   transaction_type: 'BUY' | 'SELL'
   quantity: number
   price?: number
+  average_price?: number
   amount?: number
-  trade_date: string
+  trade_date?: string
+  exchange_timestamp?: string
+  order_timestamp?: string
   option_type?: 'CE' | 'PE' | string
+  product?: string
 }
 
-let hasLoggedTodayShape = false
-let hasLoggedHistoricalShape = false
-
 export async function getTodayTrades(accessToken: string): Promise<UpstoxTradeRow[]> {
-  // NOTE: this exact path is not independently confirmed from Upstox's official docs in this
-  // pass (unlike historical-trades, below, which is) — if this 404s on a real account, check
-  // Upstox's current "order trades" endpoint name in their docs and update this one line.
   let response: Response
   try {
     response = await fetch(`${BASE_URL}/order/trades/get-trades-for-day`, {
@@ -62,46 +63,54 @@ export async function getTodayTrades(accessToken: string): Promise<UpstoxTradeRo
 
   const body = await response.json().catch(() => null)
   if (!response.ok || body?.status !== 'success') {
-    throw new UpstoxApiError(body?.errors?.[0]?.message ?? 'Unable to load today\'s trades', response.status === 401 ? 'auth' : 'data')
+    throw new UpstoxApiError(body?.errors?.[0]?.message ?? "Unable to load today's trades", response.status === 401 ? 'auth' : 'data')
   }
-
-  const rows = (body.data ?? []) as UpstoxTradeRow[]
-  if (!hasLoggedTodayShape && rows.length > 0) {
-    console.debug('[Upstox] today-trades row shape (first row):', rows[0])
-    hasLoggedTodayShape = true
-  }
-  return rows
+  return (body.data ?? []) as UpstoxTradeRow[]
 }
+
+/** Documented contract: page_number starts at 1, page_size 1..5000, response meta_data.page.total_pages. */
+const HISTORICAL_PAGE_SIZE = 1000
+const HISTORICAL_MAX_PAGES = 500
 
 export async function getHistoricalTrades(
   accessToken: string,
   params: { startDate: string; endDate: string; segment?: string },
 ): Promise<UpstoxTradeRow[]> {
-  const url = new URL(`${BASE_URL}/charges/historical-trades`)
-  url.searchParams.set('start_date', params.startDate)
-  url.searchParams.set('end_date', params.endDate)
-  if (params.segment) {
-    url.searchParams.set('segment', params.segment)
-  }
-  url.searchParams.set('page_number', '1')
-  url.searchParams.set('page_size', '500')
+  const all: UpstoxTradeRow[] = []
+  let page = 1
+  let totalPages = 1
 
-  let response: Response
-  try {
-    response = await fetch(url.toString(), { method: 'GET', headers: authHeaders(accessToken) })
-  } catch {
-    throw new UpstoxApiError('Could not reach Upstox (network error or blocked by CORS).', 'network')
+  while (page <= totalPages && page <= HISTORICAL_MAX_PAGES) {
+    const url = new URL(`${BASE_URL}/charges/historical-trades`)
+    url.searchParams.set('start_date', params.startDate)
+    url.searchParams.set('end_date', params.endDate)
+    if (params.segment) {
+      url.searchParams.set('segment', params.segment)
+    }
+    url.searchParams.set('page_number', String(page))
+    url.searchParams.set('page_size', String(HISTORICAL_PAGE_SIZE))
+
+    let response: Response
+    try {
+      response = await fetch(url.toString(), { method: 'GET', headers: authHeaders(accessToken) })
+    } catch {
+      throw new UpstoxApiError('Could not reach Upstox (network error or blocked by CORS).', 'network')
+    }
+
+    const body = await response.json().catch(() => null)
+    if (!response.ok || body?.status !== 'success') {
+      throw new UpstoxApiError(body?.errors?.[0]?.message ?? 'Unable to load historical trades', response.status === 401 ? 'auth' : 'data')
+    }
+
+    all.push(...((body.data ?? []) as UpstoxTradeRow[]))
+    const reportedPages = Number(body?.meta_data?.page?.total_pages)
+    totalPages = Number.isFinite(reportedPages) && reportedPages > 0 ? reportedPages : page
+    page += 1
   }
 
-  const body = await response.json().catch(() => null)
-  if (!response.ok || body?.status !== 'success') {
-    throw new UpstoxApiError(body?.errors?.[0]?.message ?? 'Unable to load historical trades', response.status === 401 ? 'auth' : 'data')
+  if (totalPages > HISTORICAL_MAX_PAGES) {
+    // Never import a silently truncated set.
+    throw new UpstoxApiError(`Upstox reported ${totalPages} pages; refusing to import a partial set. Try a shorter range.`, 'data')
   }
-
-  const rows = (body.data ?? []) as UpstoxTradeRow[]
-  if (!hasLoggedHistoricalShape && rows.length > 0) {
-    console.debug('[Upstox] historical-trades row shape (first row):', rows[0])
-    hasLoggedHistoricalShape = true
-  }
-  return rows
+  return all
 }

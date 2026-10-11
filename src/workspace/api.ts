@@ -390,6 +390,19 @@ export const workspaceApi = {
       body: JSON.stringify({ access_token: accessToken }),
     }),
 
+  /** Dhan historical trades with charges (paginated, page starts at 0) — proxied for the same CORS reason. */
+  getDhanTradeHistory: (accessToken: string, fromDate: string, toDate: string, page: number) =>
+    request<unknown[]>('/api/dhan/trade-history', {
+      method: 'POST',
+      body: JSON.stringify({ access_token: accessToken, from_date: fromDate, to_date: toDate, page }),
+    }),
+
+  getDhanOrders: (accessToken: string) =>
+    request<unknown[]>('/api/dhan/orders', {
+      method: 'POST',
+      body: JSON.stringify({ access_token: accessToken }),
+    }),
+
   createCheckout: (workspaceId: string, planName: string, billingCycle: 'MONTHLY' | 'QUARTERLY' | 'YEARLY') =>
     request<CheckoutOutApi>(`/api/billing/workspaces/${workspaceId}/checkout`, {
       method: 'POST',

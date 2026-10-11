@@ -1,0 +1,15 @@
+.bsync-panel { grid-column: 1 / -1; position: relative; z-index: 2; background: var(--panel, #fff); margin-top: 24px; padding: 16px; border: 1px solid var(--border, #d9dee7); border-radius: 12px; display: grid; gap: 10px; }
+.bsync-panel h3, .bsync-panel h4 { margin: 8px 0 0; }
+.bsync-muted { opacity: 0.75; font-size: 0.9rem; margin: 0; }
+.bsync-field { display: grid; gap: 4px; font-size: 0.9rem; }
+.bsync-mapping { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.bsync-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.bsync-list li { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border, #d9dee7); border-radius: 8px; }
+.bsync-list li.is-danger { color: #b3261e; }
+.bsync-scroll { max-height: 320px; overflow: auto; }
+.bsync-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.bsync-table th, .bsync-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border, #e5e8ee); vertical-align: top; }
+.bsync-invalid td { color: #b3261e; }
+.bsync-duplicate td { opacity: 0.6; }
+.bsync-warning td { color: #8a5a00; }
+@media (max-width: 640px) { .bsync-panel { padding: 12px; } }

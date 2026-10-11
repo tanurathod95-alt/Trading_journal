@@ -193,8 +193,8 @@ export async function getLtpData(
  * Raw shape of one trade-book row. Field names are Angel One's documented
  * lowercase convention (matching `clientcode`/`totp` etc. used elsewhere in
  * this file) but are NOT confirmed against a live response in this repo —
- * `getTradeBook` logs the first raw row once via console.debug so the
- * caller/mapper can be checked against a real account before being trusted.
+ * Rows whose fields cannot be
+ * parsed reliably are rejected for review by the mapper, never guessed.
  */
 export interface AngelOneTradeBookRow {
   tradingsymbol: string
@@ -209,8 +209,6 @@ export interface AngelOneTradeBookRow {
   filltime: string
   exchtime?: string
 }
-
-let hasLoggedTradeBookShape = false
 
 export async function getTradeBook(session: AngelOneSession): Promise<AngelOneTradeBookRow[]> {
   let response: Response
@@ -229,11 +227,5 @@ export async function getTradeBook(session: AngelOneSession): Promise<AngelOneTr
     throw new AngelOneApiError(body?.message ?? 'Unable to load trade book', 'data')
   }
 
-  const rows = (body.data ?? []) as AngelOneTradeBookRow[]
-  if (!hasLoggedTradeBookShape && rows.length > 0) {
-    // One-time diagnostic: confirm real field names before trusting the mapper in angelOneTradeSync.ts.
-    console.debug('[AngelOne] trade-book row shape (first row):', rows[0])
-    hasLoggedTradeBookShape = true
-  }
-  return rows
+  return (body.data ?? []) as AngelOneTradeBookRow[]
 }

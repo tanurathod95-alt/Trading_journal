@@ -397,3 +397,10 @@ class ZerodhaTokenOut(BaseModel):
 
 class DhanTradesRequest(BaseModel):
     access_token: str
+
+
+class DhanTradeHistoryRequest(BaseModel):
+    access_token: str
+    from_date: dt.date
+    to_date: dt.date
+    page: int = Field(default=0, ge=0, le=10_000)

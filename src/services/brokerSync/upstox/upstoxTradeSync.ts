@@ -1,76 +1,62 @@
-import type { Trade, TradeSide, TradingSegment } from '../../../types'
-import { matchFills, type FillMatchResult, type NormalizedFill } from '../matchFills'
+import type { TradingSegment } from '../../../types'
+import { toBatch, type FillBatch, type RawFillInput } from '../normalizeFill'
 import { getHistoricalTrades, getTodayTrades, type UpstoxTradeRow } from './upstoxApi'
 
 const HISTORICAL_LOOKBACK_DAYS = 90
 
-/** NSE/BSE = cash equity; everything else (NFO/BFO/MCX/CDS) is a derivative — Upstox's
- * historical-trades endpoint does carry an `option_type` field for F&O rows, which (when
- * present) tells us OPTIONS directly instead of guessing from the symbol suffix like Angel One. */
-function inferSegment(exchange: string, optionType: string | undefined): TradingSegment {
+/** NSE/BSE = cash equity; everything else is a derivative. Historical rows carry `option_type`; today's rows don't, so fall back to the CE/PE symbol suffix. */
+function inferSegment(exchange: string, optionType: string | undefined, symbol: string): TradingSegment {
   const ex = exchange.toUpperCase()
   if (ex === 'NSE' || ex === 'BSE') return 'CASH'
   if (optionType === 'CE' || optionType === 'PE') return 'OPTIONS'
+  const sym = symbol.toUpperCase()
+  if (!optionType && (sym.endsWith('CE') || sym.endsWith('PE'))) return 'OPTIONS'
   return 'FUTURES'
 }
 
-function toDateString(value: string | undefined): string {
-  if (value) {
-    const parsed = new Date(value)
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString().slice(0, 10)
+/**
+ * Maps one Upstox row. Today's and historical rows use different field names (see UpstoxTradeRow):
+ * price = `price` (historical) or `average_price` (today); timestamp = `trade_date` (historical,
+ * date only) or `exchange_timestamp`/`order_timestamp` (today).
+ */
+export function normalizeUpstoxRows(rows: UpstoxTradeRow[]): FillBatch {
+  const inputs: RawFillInput[] = rows.map((row) => {
+    const symbol = row.symbol || row.trading_symbol || row.tradingsymbol || row.scrip_name || ''
+    const derivedPrice = row.amount && row.quantity ? row.amount / row.quantity : undefined
+    return {
+      fillId: row.trade_id,
+      symbol,
+      segment: inferSegment(row.exchange ?? '', row.option_type, symbol),
+      side: row.transaction_type,
+      quantity: row.quantity,
+      price: row.price ?? row.average_price ?? derivedPrice,
+      timestamp: row.exchange_timestamp ?? row.trade_date ?? row.order_timestamp,
+      orderId: row.order_id,
+      exchange: row.exchange,
+      product: row.product,
     }
-  }
-  return new Date().toISOString().slice(0, 10)
-}
-
-function normalizeUpstoxRow(row: UpstoxTradeRow): NormalizedFill {
-  const price = row.price ?? (row.amount && row.quantity ? row.amount / row.quantity : 0)
-  return {
-    fillId: row.trade_id,
-    symbol: row.symbol || row.scrip_name || 'UNKNOWN',
-    segment: inferSegment(row.exchange, row.option_type),
-    side: row.transaction_type as TradeSide,
-    quantity: Number(row.quantity) || 0,
-    price: Number(price) || 0,
-    date: toDateString(row.trade_date),
-  }
-}
-
-export interface UpstoxSyncResult extends FillMatchResult {
-  /** True when this run also pulled a historical backfill (first-ever connect for this account). */
-  backfilled: boolean
+  })
+  return toBatch(inputs)
 }
 
 /**
- * Fetches and matches Upstox trades for an account. On the very first sync for an account (no
- * prior sync timestamp recorded — see the `upstox-last-sync-{accountId}` localStorage key the
- * caller manages), also pulls a historical-trades backfill: unlike Angel One, Upstox has a real,
- * documented historical endpoint, so there's no reason to start blind with only "today."
+ * Today's trades, plus (when `includeHistory`) a paginated historical backfill. Historical rows
+ * overlap today's when the window includes today; ids are de-duplicated before normalizing.
  */
-export async function syncUpstoxTrades(
-  accessToken: string,
-  accountId: string,
-  existingTrades: Trade[],
-  isFirstSync: boolean,
-): Promise<UpstoxSyncResult> {
+export async function fetchUpstoxFills(accessToken: string, includeHistory: boolean): Promise<FillBatch> {
   const todayRows = await getTodayTrades(accessToken)
   let rows: UpstoxTradeRow[] = todayRows
 
-  if (isFirstSync) {
+  if (includeHistory) {
     const end = new Date()
     const start = new Date(end.getTime() - HISTORICAL_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
     const historicalRows = await getHistoricalTrades(accessToken, {
       startDate: start.toISOString().slice(0, 10),
       endDate: end.toISOString().slice(0, 10),
     })
-    // Historical rows may overlap with "today" if the lookback window includes today —
-    // de-dup by trade_id before matching (matchFills also dedups against Dexie, but not
-    // within this one fetched batch).
     const seen = new Set(todayRows.map((r) => r.trade_id))
     rows = [...historicalRows.filter((r) => !seen.has(r.trade_id)), ...todayRows]
   }
 
-  const result = matchFills(rows.map(normalizeUpstoxRow), accountId, existingTrades)
-  return { ...result, backfilled: isFirstSync }
+  return normalizeUpstoxRows(rows)
 }
