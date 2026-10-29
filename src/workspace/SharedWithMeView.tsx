@@ -105,7 +105,8 @@ export function SharedWithMeView({ onClose }: { onClose: () => void }) {
                 <p>No trades in this account yet.</p>
               </div>
             ) : (
-              <table className="ws-members-table">
+              <div className="ws-table-wrap">
+              <table className="ws-members-table" style={{ minWidth: 640 }}>
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -133,6 +134,7 @@ export function SharedWithMeView({ onClose }: { onClose: () => void }) {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         )}

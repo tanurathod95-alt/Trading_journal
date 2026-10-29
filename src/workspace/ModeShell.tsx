@@ -102,7 +102,7 @@ export function ModeShell() {
         <WorkspaceBar mode="business" onChangeMode={goHome} />
       </ErrorBoundary>
       <ErrorBoundary label="Business mode">
-        <BusinessMode />
+        <BusinessMode onGoHome={goHome} />
       </ErrorBoundary>
     </div>
   )

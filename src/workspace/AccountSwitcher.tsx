@@ -2,9 +2,13 @@ import { useState } from 'react'
 import { useWorkspaceAuth } from './WorkspaceAuthContext'
 
 export function AccountSwitcher() {
-  const { accounts, currentAccountId, setCurrentAccountId } = useWorkspaceAuth()
+  const { accounts: allAccounts, currentAccountId, setCurrentAccountId } = useWorkspaceAuth()
   const [open, setOpen] = useState(false)
 
+  // Only shown in Personal mode (see WorkspaceBar) — must never offer a
+  // Business account here, same rule as App.tsx's own Personal-mode account
+  // list.
+  const accounts = allAccounts.filter((a) => a.account_type.trim().toLowerCase() !== 'business')
   const current = accounts.find((a) => a.id === currentAccountId) ?? null
 
   if (accounts.length === 0) {

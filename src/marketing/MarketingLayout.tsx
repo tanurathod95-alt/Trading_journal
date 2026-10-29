@@ -4,7 +4,7 @@ import { ErrorBoundary } from '../components/ErrorBoundary'
 import { AuthModal } from '../workspace/AuthGate'
 
 const navLinks = [
-  { to: '/', label: 'Home', end: true },
+  { to: '/', label: 'Home' },
   { to: '/features', label: 'Features' },
   { to: '/for-traders', label: 'For Traders' },
   { to: '/for-portfolio-managers', label: 'For Portfolio Managers' },
@@ -77,7 +77,7 @@ export function MarketingLayout() {
         <div className={`mk-nav-collapsible ${menuOpen ? 'open' : ''}`}>
           <nav className="mk-nav-links">
             {navLinks.map((link) => (
-              <NavLink key={link.to} to={link.to} end={'end' in link} className={({ isActive }) => (isActive ? 'active' : '')}>
+              <NavLink key={link.to} to={link.to} end={link.to === '/'} className={({ isActive }) => (isActive ? 'active' : '')}>
                 {link.label}
               </NavLink>
             ))}

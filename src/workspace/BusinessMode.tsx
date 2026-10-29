@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import App from '../App'
 import type { TradingAccountApi } from './api'
+import { BillingPage } from './BillingPage'
+import { BusinessOnboarding } from './BusinessOnboarding'
 import { MyAccountsModal } from './MyAccountsModal'
+import { PortfoliosModal } from './PortfoliosModal'
+import { ProfileModal } from './ProfileModal'
 import { UserPermissionsPage } from './UserPermissionsPage'
 import { useWorkspaceAuth } from './WorkspaceAuthContext'
 
@@ -25,9 +29,9 @@ const BUSINESS_ACCOUNT_TYPE = 'Business'
  * form — opened only when the user asks for it (the "+ Create Business
  * Account" button below), never automatically on landing here.
  */
-export function BusinessMode() {
+export function BusinessMode({ onGoHome }: { onGoHome?: () => void }) {
   const { accounts, accountsLoading } = useWorkspaceAuth()
-  const [panel, setPanel] = useState<'accounts' | null>(null)
+  const [panel, setPanel] = useState<'accounts' | 'portfolios' | 'billing' | 'settings' | null>(null)
   const [page, setPage] = useState<'dashboard' | 'users'>('dashboard')
 
   const businessAccounts = accounts.filter((account: TradingAccountApi) => !account.is_archived)
@@ -42,24 +46,25 @@ export function BusinessMode() {
     )
   } else if (!primary) {
     main = (
-      <div className="ws-mode-placeholder">
-        <h2>Business Dashboard</h2>
-        <p className="ws-muted">No business account available.</p>
-        <button type="button" className="ws-primary-btn" onClick={() => setPanel('accounts')}>
-          + Create Business Account
-        </button>
-      </div>
+      <BusinessOnboarding
+        onCreateAccount={() => setPanel('accounts')}
+        onOpenAccounts={() => setPanel('accounts')}
+        onOpenPortfolios={() => setPanel('portfolios')}
+        onOpenBilling={() => setPanel('billing')}
+        onOpenSettings={() => setPanel('settings')}
+      />
     )
   } else {
     main = (
       <App
         key={businessAccounts.map((a) => a.id).join(',')}
         mode="business"
+        onGoHome={onGoHome}
         businessAccounts={businessAccounts}
         extraNav={[
           { key: 'users', label: 'User and Permissions', icon: ShieldCheck, onClick: () => setPage('users'), active: page === 'users' },
         ]}
-        extraPage={page === 'users' ? <UserPermissionsPage account={primary} /> : undefined}
+        extraPage={page === 'users' ? <UserPermissionsPage accounts={businessAccounts} /> : undefined}
         onTabSelect={() => setPage('dashboard')}
       />
     )
@@ -71,10 +76,16 @@ export function BusinessMode() {
       {panel === 'accounts' && (
         <MyAccountsModal
           onClose={() => setPanel(null)}
-          initialType={!primary ? BUSINESS_ACCOUNT_TYPE : undefined}
+          // Every account added from here is a Business account, not just
+          // the first one — this modal is only ever opened from Business
+          // mode (see the import comment above).
+          initialType={BUSINESS_ACCOUNT_TYPE}
           autoOpenAdd={!primary}
         />
       )}
+      {panel === 'portfolios' && <PortfoliosModal onClose={() => setPanel(null)} />}
+      {panel === 'billing' && <BillingPage onClose={() => setPanel(null)} />}
+      {panel === 'settings' && <ProfileModal onClose={() => setPanel(null)} />}
     </>
   )
 }

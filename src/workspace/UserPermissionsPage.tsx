@@ -17,8 +17,13 @@ type Tab = 'users' | 'invitations'
  * worth showing. No passwords are ever involved — an invitee signs up or
  * logs in with their own credentials and accepts from their Invitations.
  */
-export function UserPermissionsPage({ account }: { account: TradingAccountApi }) {
+export function UserPermissionsPage({ accounts }: { accounts: TradingAccountApi[] }) {
   const { me } = useWorkspaceAuth()
+  // The page itself still shows one business account's users/invitations at
+  // a time (the primary/first one, same as before) — only the "Send
+  // Invitation" modal gained the ability to target any business account,
+  // via its own Account Holder dropdown below.
+  const account = accounts[0]
   const canView = account.role === 'OWNER' || account.role === 'ADMIN'
   const canManage = account.role === 'OWNER'
 
@@ -29,6 +34,7 @@ export function UserPermissionsPage({ account }: { account: TradingAccountApi })
   const [notice, setNotice] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [inviteAccountId, setInviteAccountId] = useState(account.id)
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER')
   const [submitting, setSubmitting] = useState(false)
@@ -58,12 +64,15 @@ export function UserPermissionsPage({ account }: { account: TradingAccountApi })
     setSubmitting(true)
     setModalError(null)
     try {
-      await workspaceApi.createInvitation(account.id, email.trim(), role)
+      await workspaceApi.createInvitation(inviteAccountId, email.trim(), role)
       setModalOpen(false)
       setEmail('')
       setRole('VIEWER')
+      setInviteAccountId(account.id)
       setNotice('Invitation created. No email is sent: the person will see it under Invitations after logging in with that email.')
-      await load()
+      if (inviteAccountId === account.id) {
+        await load()
+      }
     } catch (err) {
       setModalError(err instanceof ApiError ? err.message : 'Could not send the invitation.')
     } finally {
@@ -107,7 +116,7 @@ export function UserPermissionsPage({ account }: { account: TradingAccountApi })
             <p className="ws-muted">Manage users, access and invitations for your business account.</p>
           </div>
           {canManage && (
-            <button type="button" className="ws-invite-btn" onClick={() => { setModalError(null); setModalOpen(true) }}>
+            <button type="button" className="ws-invite-btn" onClick={() => { setModalError(null); setInviteAccountId(account.id); setModalOpen(true) }}>
               <UserPlus size={16} />
               Send Invitation
             </button>
@@ -225,6 +234,14 @@ export function UserPermissionsPage({ account }: { account: TradingAccountApi })
               <label className="ws-field">
                 Email
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="Enter user's email address" />
+              </label>
+              <label className="ws-field">
+                Account Holder
+                <select value={inviteAccountId} onChange={(e) => setInviteAccountId(e.target.value)}>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
               </label>
               <label className="ws-field">
                 Role
