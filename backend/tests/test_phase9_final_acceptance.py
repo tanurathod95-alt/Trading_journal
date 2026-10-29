@@ -22,7 +22,7 @@ def _create_account(client, workspace_id, name):
     return r.json()
 
 
-def test_full_acceptance_scenario_from_the_original_spec(client, db_sessionmaker):
+def test_full_acceptance_scenario_from_the_original_spec(client, db_sessionmaker, set_plan):
     """
     The exact end-to-end scenario given in the original spec: User A creates
     10 accounts, shares exactly one (A5) with Person B as VIEWER, and every
@@ -31,7 +31,7 @@ def test_full_acceptance_scenario_from_the_original_spec(client, db_sessionmaker
     """
     user_a = _signup(client, "usera@example.com", "User A")
     ws_a = user_a["workspaces"][0]["id"]
-    client.patch(f"/api/workspaces/{ws_a}/plan", json={"plan": "BUSINESS"})  # FREE caps accounts at 3; this scenario needs 10
+    set_plan(ws_a, "BUSINESS")  # FREE caps accounts at 3; this scenario needs 10
 
     accounts = [_create_account(client, ws_a, f"A{i}") for i in range(1, 11)]
     a5 = accounts[4]
@@ -76,8 +76,8 @@ def test_full_acceptance_scenario_from_the_original_spec(client, db_sessionmaker
     # Person B cannot change permissions (view or alter the members/invitations lists) on A5.
     assert client.get(f"/api/accounts/{a5['id']}/members").status_code == 403
     assert client.get(f"/api/accounts/{a5['id']}/invitations").status_code == 403
-    # Person B cannot manage the workspace's plan (not even a workspace member of ws_a).
-    assert client.patch(f"/api/workspaces/{ws_a}/plan", json={"plan": "BUSINESS"}).status_code == 404
+    # Person B cannot change a plan at all (only platform staff can).
+    assert client.patch(f"/api/workspaces/{ws_a}/plan", json={"plan": "BUSINESS"}).status_code == 405
     # Person B cannot read the audit log.
     assert client.get(f"/api/accounts/{a5['id']}/audit-log").status_code == 403
 
@@ -96,7 +96,7 @@ def test_full_acceptance_scenario_from_the_original_spec(client, db_sessionmaker
     assert client.get("/api/accounts").json() == []
 
 
-def test_data_isolation_and_scoped_listing_holds_up_at_moderate_scale(client):
+def test_data_isolation_and_scoped_listing_holds_up_at_moderate_scale(client, set_plan):
     """
     A lightweight performance/isolation sanity check (not a load test):
     two users each create a batch of accounts, and each user's own list
@@ -105,14 +105,14 @@ def test_data_isolation_and_scoped_listing_holds_up_at_moderate_scale(client):
     """
     user_a = _signup(client, "scalea@example.com", "Scale A")
     ws_a = user_a["workspaces"][0]["id"]
-    client.patch(f"/api/workspaces/{ws_a}/plan", json={"plan": "BUSINESS"})  # FREE caps accounts at 3
+    set_plan(ws_a, "BUSINESS")  # FREE caps accounts at 3
     for i in range(15):
         _create_account(client, ws_a, f"A-{i}")
     client.post("/api/auth/logout")
 
     user_b = _signup(client, "scaleb@example.com", "Scale B")
     ws_b = user_b["workspaces"][0]["id"]
-    client.patch(f"/api/workspaces/{ws_b}/plan", json={"plan": "BUSINESS"})
+    set_plan(ws_b, "BUSINESS")
     for i in range(15):
         _create_account(client, ws_b, f"B-{i}")
 

@@ -45,3 +45,16 @@ def client(db_sessionmaker):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def set_plan(db_sessionmaker):
+    """Puts a workspace on a plan directly in the DB — what a verified Razorpay payment does. Customers can no longer PATCH their own plan."""
+    from backend.app import models
+
+    def _set(workspace_id: str, plan: str) -> None:
+        with db_sessionmaker() as db:
+            db.get(models.Workspace, workspace_id).plan = plan
+            db.commit()
+
+    return _set

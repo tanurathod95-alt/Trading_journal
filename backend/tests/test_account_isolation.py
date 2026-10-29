@@ -73,7 +73,7 @@ def test_list_accounts_never_leaks_between_users(client):
     assert names == {"B4 Account 1"}
 
 
-def test_trading_account_creation_is_capped_by_plan_and_lifted_by_upgrading(client):
+def test_trading_account_creation_is_capped_by_plan_and_lifted_by_upgrading(client, set_plan):
     user = _signup(client, "a5@example.com", "A5")
     ws_id = user["workspaces"][0]["id"]
 
@@ -84,8 +84,7 @@ def test_trading_account_creation_is_capped_by_plan_and_lifted_by_upgrading(clie
     r_blocked = _create_account(client, ws_id, name="A5 Account 4")
     assert r_blocked.status_code == 402
 
-    r_upgrade = client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "BUSINESS"})
-    assert r_upgrade.status_code == 200
+    set_plan(ws_id, "BUSINESS")  # what a verified payment does; customers can't PATCH their own plan
 
     for i in range(4, 11):  # BUSINESS is unlimited
         r = _create_account(client, ws_id, name=f"A5 Account {i}")

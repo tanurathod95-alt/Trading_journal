@@ -7,7 +7,7 @@ export type DhanSyncResult = FillMatchResult
 /** Dhan's own documented segment/option fields, not a symbol-suffix guess like Angel One had to
  * use — exchangeSegment is e.g. "NSE_EQ"/"BSE_EQ" for cash, "NSE_FNO"/"BSE_FNO"/"MCX_COMM" etc.
  * for derivatives; drvOptionType (CALL/PUT) distinguishes options from futures when present. */
-function inferSegment(exchangeSegment: string, drvOptionType: string | null | undefined): TradingSegment {
+export function inferSegment(exchangeSegment: string, drvOptionType: string | null | undefined): TradingSegment {
   if (exchangeSegment.toUpperCase().endsWith('_EQ')) return 'CASH'
   if (drvOptionType === 'CALL' || drvOptionType === 'PUT') return 'OPTIONS'
   return 'FUTURES'
@@ -26,7 +26,7 @@ function toDateString(value: string | undefined): string {
 function normalizeDhanRow(row: DhanTradeRow): NormalizedFill {
   return {
     fillId: row.exchangeTradeId || row.orderId,
-    symbol: row.tradingSymbol,
+    symbol: row.tradingSymbol ?? row.customSymbol ?? row.securityId,
     segment: inferSegment(row.exchangeSegment, row.drvOptionType),
     side: row.transactionType as TradeSide,
     quantity: Number(row.tradedQuantity) || 0,

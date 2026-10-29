@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DBSession
 
 from . import models
+from .observability import tracked
 
 
 class PlanTier:
@@ -39,6 +40,7 @@ PLAN_LIMITS: dict[str, PlanLimits] = {
 }
 
 
+@tracked("plans.limits_for")
 def limits_for(plan: str) -> PlanLimits:
     return PLAN_LIMITS.get(plan, PLAN_LIMITS[PlanTier.FREE])
 
@@ -84,6 +86,7 @@ def count_account_seats(db: DBSession, trading_account_id: str) -> int:
     return members + pending_invites
 
 
+@tracked("plans.enforce_trading_account_limit")
 def enforce_trading_account_limit(db: DBSession, workspace: models.Workspace) -> None:
     limits = limits_for(workspace.plan)
     if limits.max_trading_accounts is None:
@@ -98,6 +101,7 @@ def enforce_trading_account_limit(db: DBSession, workspace: models.Workspace) ->
         )
 
 
+@tracked("plans.enforce_account_seat_limit")
 def enforce_account_seat_limit(db: DBSession, workspace: models.Workspace, trading_account_id: str) -> None:
     limits = limits_for(workspace.plan)
     if limits.max_members_per_account is None:

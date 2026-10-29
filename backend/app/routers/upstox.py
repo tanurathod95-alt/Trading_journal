@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from .. import models, schemas
 from ..config import settings
 from ..deps import get_current_user
+from ..observability import track
 
 router = APIRouter(prefix="/api/upstox", tags=["upstox"])
 
@@ -23,25 +24,29 @@ def exchange_token(
     Dexie writes) is client-side, same as Angel One — this is a pure
     pass-through proxy, touches no database table, persists nothing.
     """
-    try:
-        response = httpx.post(
-            _TOKEN_URL,
-            data={
-                "code": payload.code,
-                "client_id": payload.client_id,
-                "client_secret": settings.upstox_client_secret,
-                "redirect_uri": payload.redirect_uri,
-                "grant_type": "authorization_code",
-            },
-            headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
-            timeout=15.0,
-        )
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Could not reach Upstox to exchange the authorization code") from exc
+    with track("upstox.exchange_token", "upstream"):
+        try:
+            response = httpx.post(
+                _TOKEN_URL,
+                data={
+                    "code": payload.code,
+                    "client_id": payload.client_id,
+                    "client_secret": settings.upstox_client_secret,
+                    "redirect_uri": payload.redirect_uri,
+                    "grant_type": "authorization_code",
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
+                timeout=15.0,
+            )
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail="Could not reach Upstox to exchange the authorization code") from exc
 
-    body = response.json() if response.content else {}
-    access_token = body.get("access_token")
-    if not response.is_success or not access_token:
-        raise HTTPException(status_code=400, detail=body.get("error_description") or body.get("message") or "Upstox token exchange failed")
+        body = response.json() if response.content else {}
+        access_token = body.get("access_token")
+        if not response.is_success or not access_token:
+            errors = body.get("errors") or []
+            upstox_message = errors[0].get("message") if errors and isinstance(errors[0], dict) else None
+            detail = upstox_message or body.get("error_description") or body.get("message") or "Upstox token exchange failed"
+            raise HTTPException(status_code=400, detail=f"Upstox: {detail}")
 
-    return schemas.UpstoxTokenOut(access_token=access_token)
+        return schemas.UpstoxTokenOut(access_token=access_token)

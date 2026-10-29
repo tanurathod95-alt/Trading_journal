@@ -7,8 +7,14 @@ export interface AngelOneCredentials {
   totpSecret: string
 }
 
-const BROKER_ID = 'angelOne'
 const KEY_RECORD_ID = 'angelOne-credential-key'
+
+/** One trading account's saved credentials never overwrite another's — the Dexie record key is
+ * scoped by accountId (`angelOne:<accountId>`), same AES key shared across accounts since it's
+ * just an encryption key, not a credential itself. */
+function brokerId(accountId: string): string {
+  return `angelOne:${accountId}`
+}
 
 /**
  * Honest security note: this app has no backend and no user login/passphrase
@@ -32,22 +38,22 @@ async function getOrCreateKey(): Promise<CryptoKey> {
   return key
 }
 
-export async function saveAngelOneCredentials(credentials: AngelOneCredentials): Promise<void> {
+export async function saveAngelOneCredentials(accountId: string, credentials: AngelOneCredentials): Promise<void> {
   const key = await getOrCreateKey()
   const iv = crypto.getRandomValues(new Uint8Array(12))
   const plaintext = new TextEncoder().encode(JSON.stringify(credentials))
   const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext))
 
   await db.brokerCredentials.put({
-    broker: BROKER_ID,
+    broker: brokerId(accountId),
     iv: Array.from(iv),
     ciphertext: Array.from(ciphertext),
     updatedAt: new Date().toISOString(),
   })
 }
 
-export async function loadAngelOneCredentials(): Promise<AngelOneCredentials | null> {
-  const record = await db.brokerCredentials.get(BROKER_ID)
+export async function loadAngelOneCredentials(accountId: string): Promise<AngelOneCredentials | null> {
+  const record = await db.brokerCredentials.get(brokerId(accountId))
   if (!record) {
     return null
   }
@@ -64,11 +70,11 @@ export async function loadAngelOneCredentials(): Promise<AngelOneCredentials | n
   }
 }
 
-export async function clearAngelOneCredentials(): Promise<void> {
-  await db.brokerCredentials.delete(BROKER_ID)
+export async function clearAngelOneCredentials(accountId: string): Promise<void> {
+  await db.brokerCredentials.delete(brokerId(accountId))
 }
 
-export async function hasAngelOneCredentials(): Promise<boolean> {
-  const record = await db.brokerCredentials.get(BROKER_ID)
+export async function hasAngelOneCredentials(accountId: string): Promise<boolean> {
+  const record = await db.brokerCredentials.get(brokerId(accountId))
   return record !== undefined
 }

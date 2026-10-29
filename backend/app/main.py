@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect, select, text
 
 from . import models  # noqa: F401 — imported so Base knows about them before create_all
 from .config import settings
 from .database import Base, SessionLocal, engine
-from .routers import accounts, auth, billing, broker, dhan, invitations, portfolio_invitations, portfolios, trades, upstox, workspaces, zerodha
+from .observability import observability_middleware
+from .routers import accounts, admin, admin_actions, admin_billing, auth, billing, broker, dev, dhan, invitations, portfolio_invitations, portfolios, trades, upstox, workspaces, zerodha
 
 app = FastAPI(title="Trading Journal API", version="0.1.0")
 
@@ -21,6 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.middleware("http")(observability_middleware)
+
 app.include_router(auth.router)
 app.include_router(workspaces.router)
 app.include_router(accounts.router)
@@ -33,6 +36,10 @@ app.include_router(billing.router)
 app.include_router(upstox.router)
 app.include_router(zerodha.router)
 app.include_router(dhan.router)
+app.include_router(dev.router)
+app.include_router(admin.router)
+app.include_router(admin_actions.router)
+app.include_router(admin_billing.router)
 
 
 @app.on_event("startup")
@@ -43,6 +50,7 @@ def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
     _ensure_payment_plan_columns()
     _ensure_trading_account_columns()
+    _ensure_user_columns()
 
 
 def _ensure_payment_plan_columns() -> None:
@@ -95,3 +103,29 @@ def _ensure_trading_account_columns() -> None:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, str]:
+    """Liveness: the process is up and serving. Deliberately touches nothing else."""
+    return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz() -> dict[str, str]:
+    """Readiness: the process can actually reach its database — 503 otherwise, so a load balancer stops routing here."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+    return {"status": "ready"}
+
+
+def _ensure_user_columns() -> None:
+    """`users` predates `platform_role` (staff roles) — add it on first run after the upgrade, same pattern as above."""
+    existing_columns = {col["name"] for col in inspect(engine).get_columns("users")}
+    if "platform_role" in existing_columns:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE users ADD COLUMN platform_role VARCHAR(20) NOT NULL DEFAULT 'USER'"))

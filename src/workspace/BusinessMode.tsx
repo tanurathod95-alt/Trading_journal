@@ -1,27 +1,23 @@
 import { useState } from 'react'
-import { LayoutGrid, ShieldCheck, UsersRound } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import App from '../App'
 import type { TradingAccountApi } from './api'
 import { MyAccountsModal } from './MyAccountsModal'
-import { PortfoliosModal } from './PortfoliosModal'
 import { UserPermissionsPage } from './UserPermissionsPage'
 import { useWorkspaceAuth } from './WorkspaceAuthContext'
 
 const BUSINESS_ACCOUNT_TYPE = 'Business'
 
-function isBusinessAccount(account: TradingAccountApi): boolean {
-  return account.account_type.trim().toLowerCase() === BUSINESS_ACCOUNT_TYPE.toLowerCase() && !account.is_archived
-}
-
 /**
  * Business dashboard: the same journal UI as Personal Trading (App), pointed
- * at every backend business account this user has access to at once — so
- * Account Performance (an existing App panel that already iterates over
- * `accounts`) lists every one of them, not just one. Which accounts appear —
- * and whether each is writable — is decided by the backend per account
- * (owner/admin vs accepted VIEWER); pending or declined invitations never
- * produce an account. "User and Permissions" manages the primary (first)
- * business account, same as before — this change is scoped to Account
+ * at every backend account in this workspace this user has access to at once
+ * — every account type (Trading, Business, Commodity, Options, …), not just
+ * ones typed "Business" — so Account Performance (an existing App panel that
+ * already iterates over `accounts`) lists every one of them. Which accounts
+ * appear — and whether each is writable — is decided by the backend per
+ * account (owner/admin vs accepted VIEWER); pending or declined invitations
+ * never produce an account. "User and Permissions" manages the primary
+ * (first) account, same as before — this change is scoped to Account
  * Performance / dashboard data, not to member/invitation management.
  *
  * Account creation deliberately reuses the existing Accounts panel
@@ -31,10 +27,10 @@ function isBusinessAccount(account: TradingAccountApi): boolean {
  */
 export function BusinessMode() {
   const { accounts, accountsLoading } = useWorkspaceAuth()
-  const [panel, setPanel] = useState<'accounts' | 'portfolios' | null>(null)
+  const [panel, setPanel] = useState<'accounts' | null>(null)
   const [page, setPage] = useState<'dashboard' | 'users'>('dashboard')
 
-  const businessAccounts = accounts.filter(isBusinessAccount)
+  const businessAccounts = accounts.filter((account: TradingAccountApi) => !account.is_archived)
   const primary = businessAccounts[0] ?? null
 
   let main: React.ReactNode
@@ -61,8 +57,6 @@ export function BusinessMode() {
         mode="business"
         businessAccounts={businessAccounts}
         extraNav={[
-          { key: 'accounts', label: 'Accounts', icon: LayoutGrid, onClick: () => setPanel('accounts') },
-          { key: 'portfolios', label: 'Portfolios', icon: UsersRound, onClick: () => setPanel('portfolios') },
           { key: 'users', label: 'User and Permissions', icon: ShieldCheck, onClick: () => setPage('users'), active: page === 'users' },
         ]}
         extraPage={page === 'users' ? <UserPermissionsPage account={primary} /> : undefined}
@@ -81,7 +75,6 @@ export function BusinessMode() {
           autoOpenAdd={!primary}
         />
       )}
-      {panel === 'portfolios' && <PortfoliosModal onClose={() => setPanel(null)} />}
     </>
   )
 }

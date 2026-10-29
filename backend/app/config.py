@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # reset to anyone who knows an email address.
     expose_reset_token_in_response: bool = True
 
+    # Where the web app lives — used to build the password-reset links staff hand to customers. Set per environment.
+    frontend_base_url: str = "http://localhost:5173"
+
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # Must stay False on plain http://localhost — browsers silently drop

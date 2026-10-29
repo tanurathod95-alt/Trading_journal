@@ -1,12 +1,38 @@
 import { Link } from 'react-router-dom'
+import { BarChart3, BookOpen, Briefcase, Layers, Link2, MonitorSmartphone, ShieldCheck, Users, type LucideIcon } from 'lucide-react'
 import { PromoBanner } from '../PromoBanner'
+
+const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
+  { icon: BookOpen, title: 'Trading Journal', text: 'Entries, exits, strategy notes, screenshots and full trade review — for every account.' },
+  { icon: Users, title: 'Multi-Account Management', text: 'Unlimited trading accounts across different brokers, cleanly isolated from one another.' },
+  { icon: Briefcase, title: 'Portfolio Management', text: 'Group accounts under a portfolio for one client — holdings, P&L and performance in one place.' },
+  { icon: MonitorSmartphone, title: 'Client Portal', text: 'A dedicated, read-only view for anyone you share a portfolio with.' },
+  { icon: BarChart3, title: 'Analytics', text: 'Win rate, profit factor, average win/loss and drawdown, computed from your real trades.' },
+  { icon: Link2, title: 'Broker Integrations', text: 'Angel One today, with more brokers planned — credentials encrypted at rest, never shown to a Viewer.' },
+]
+
+function ShotFrame({ src, label, eager = false }: { src: string; label: string; eager?: boolean }) {
+  return (
+    <div className="mkh-frame">
+      <div className="mk-browser-chrome">
+        <span className="mk-browser-dot red" />
+        <span className="mk-browser-dot yellow" />
+        <span className="mk-browser-dot green" />
+        <span className="mk-browser-title">{label}</span>
+      </div>
+      <img src={src} alt={`Trading Journal — ${label} screen`} width={1600} height={1000} loading={eager ? 'eager' : 'lazy'} decoding="async" />
+    </div>
+  )
+}
 
 export function Home() {
   return (
     <>
-      <section className="mk-hero">
+      <section className="mk-hero mkh-hero">
         <p className="mk-demo-label">Illustrative demo data shown below — not real account figures</p>
-        <h1>One workspace for your trading, portfolios and performance.</h1>
+        <h1>
+          One workspace for your trading, portfolios and <span className="mkh-accent">performance.</span>
+        </h1>
         <p className="mk-sub">
           Track multiple trading accounts, manage client portfolios, analyze performance and share secure read-only
           reports — all from one platform.
@@ -15,78 +41,61 @@ export function Home() {
           <Link to="/app" className="mk-btn-primary">Start Free</Link>
           <Link to="/features" className="mk-btn-secondary">Explore Features</Link>
         </div>
-      </section>
 
-      <section className="mk-section tight">
-        <p className="mk-eyebrow" style={{ textAlign: 'center' }}>See it in action</p>
-        <h2 style={{ textAlign: 'center' }}>What it actually looks like inside</h2>
-        <p className="mk-lead" style={{ textAlign: 'center', margin: '0 auto 32px' }}>
-          Real screens from the app — Dashboard, Journal and Analytics. Sample data shown for illustration.
-        </p>
-
-        <div className="mk-showcase-scroll">
-          {[
-            { src: '/screenshots/dashboard.png', label: 'Dashboard' },
-            { src: '/screenshots/journal.png', label: 'Journal' },
-            { src: '/screenshots/analytics.png', label: 'Analytics' },
-          ].map((shot) => (
-            <div key={shot.label} className="mk-browser-frame">
-              <div className="mk-browser-chrome">
-                <span className="mk-browser-dot red" />
-                <span className="mk-browser-dot yellow" />
-                <span className="mk-browser-dot green" />
-                <span className="mk-browser-title">{shot.label}</span>
-              </div>
-              <img src={shot.src} alt={`Trading Journal — ${shot.label} screen`} loading="lazy" />
-            </div>
-          ))}
+        <div className="mkh-hero-preview">
+          <ShotFrame src="/screenshots/dashboard.png" label="Dashboard" eager />
         </div>
       </section>
 
-      <section className="mk-section">
-        <p className="mk-eyebrow">The problem</p>
-        <h2>Trading data scattered across brokers, spreadsheets and screenshots</h2>
-        <p className="mk-lead">
-          Most traders juggle multiple broker accounts and a journal that lives nowhere in particular. Portfolio
-          managers handling several clients have it worse — there&apos;s no safe way to let a client see just their own
-          numbers without handing over everything.
+      <section className="mkh-section">
+        <p className="mk-eyebrow" style={{ textAlign: 'center' }}>See it in action</p>
+        <h2 className="mkh-h2" style={{ textAlign: 'center' }}>What it actually looks like inside</h2>
+        <p className="mkh-lead" style={{ textAlign: 'center', margin: '0 auto 32px' }}>
+          Real screens from the app — Dashboard, Journal and Analytics. Sample data shown for illustration.
         </p>
-        <p className="mk-eyebrow">The solution</p>
-        <h2>A single workspace, properly separated by account and access</h2>
-        <p className="mk-lead">
-          Every trading account is isolated. Every share is explicit and revocable. Every client sees only what
-          you&apos;ve given them — read-only, always.
-        </p>
+        <div className="mkh-shots">
+          <ShotFrame src="/screenshots/journal.png" label="Journal" />
+          <ShotFrame src="/screenshots/analytics.png" label="Analytics" />
+        </div>
       </section>
 
-      <section className="mk-section">
+      <section className="mkh-section">
+        <div className="mkh-ps">
+          <article className="mkh-ps-col">
+            <span className="mkh-icon" aria-hidden="true"><Layers size={22} /></span>
+            <p className="mk-eyebrow">The problem</p>
+            <h2 className="mkh-h2">Trading data scattered across brokers, spreadsheets and screenshots</h2>
+            <p className="mkh-lead">
+              Most traders juggle multiple broker accounts and a journal that lives nowhere in particular. Portfolio
+              managers handling several clients have it worse — there&apos;s no safe way to let a client see just their
+              own numbers without handing over everything.
+            </p>
+          </article>
+          <article className="mkh-ps-col solution">
+            <span className="mkh-icon" aria-hidden="true"><ShieldCheck size={22} /></span>
+            <p className="mk-eyebrow">The solution</p>
+            <h2 className="mkh-h2">A single workspace, properly separated by account and access</h2>
+            <p className="mkh-lead">
+              Every trading account is isolated. Every share is explicit and revocable. Every client sees only what
+              you&apos;ve given them — read-only, always.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section className="mkh-section">
         <p className="mk-eyebrow">What&apos;s inside</p>
-        <h2>Everything a serious trading practice needs</h2>
-        <div className="mk-grid" style={{ marginTop: 24 }}>
-          <div className="mk-card">
-            <h3>Trading Journal</h3>
-            <p>Entries, exits, strategy notes, screenshots and full trade review — for every account.</p>
-          </div>
-          <div className="mk-card">
-            <h3>Multi-Account Management</h3>
-            <p>Unlimited trading accounts across different brokers, cleanly isolated from one another.</p>
-          </div>
-          <div className="mk-card">
-            <h3>Portfolio Management</h3>
-            <p>Group accounts under a portfolio for one client — holdings, P&amp;L and performance in one place.</p>
-          </div>
-          <div className="mk-card">
-            <h3>Client Portal</h3>
-            <p>A dedicated, read-only view for anyone you share a portfolio with.</p>
-          </div>
-          <div className="mk-card">
-            <h3>Analytics</h3>
-            <p>Win rate, profit factor, average win/loss and drawdown, computed from your real trades.</p>
-          </div>
-          <div className="mk-card">
-            <h3>Broker Integrations</h3>
-            <p>Angel One today, with more brokers planned — credentials encrypted at rest, never shown to a Viewer.</p>
-          </div>
+        <h2 className="mkh-h2">Everything a serious trading practice needs</h2>
+        <div className="mkh-features">
+          {FEATURES.map(({ icon: Icon, title, text }) => (
+            <div key={title} className="mkh-feature">
+              <span className="mkh-icon" aria-hidden="true"><Icon size={22} /></span>
+              <div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

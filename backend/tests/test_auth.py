@@ -83,3 +83,34 @@ def test_password_never_stored_as_plaintext(client, db_sessionmaker):
         assert user.password_hash.startswith("$2b$")  # bcrypt hash prefix
     finally:
         db.close()
+
+
+def test_disabled_account_cannot_log_in_and_gets_a_clear_message(client, db_sessionmaker):
+    _signup(client, "off@example.com", password="password123")
+    client.post("/api/auth/logout")
+    with db_sessionmaker() as db:
+        db.scalar(select(models.User).where(models.User.email == "off@example.com")).is_active = False
+        db.commit()
+
+    r = client.post("/api/auth/login", json={"email": "off@example.com", "password": "password123"})
+    assert r.status_code == 403
+    assert "disabled" in r.json()["detail"].lower()
+    assert client.get("/api/auth/me").status_code == 401  # no session was created
+
+    with db_sessionmaker() as db:
+        failed = db.query(models.AuditLog).filter(models.AuditLog.action == "LOGIN_FAILED").all()
+        succeeded = db.query(models.AuditLog).filter(models.AuditLog.action == "LOGIN_SUCCESS").count()
+    assert any("account_disabled" in (row.metadata_json or "") for row in failed)
+    assert succeeded == 0
+
+
+def test_wrong_password_on_a_disabled_account_does_not_reveal_it_is_disabled(client, db_sessionmaker):
+    _signup(client, "off2@example.com", password="password123")
+    client.post("/api/auth/logout")
+    with db_sessionmaker() as db:
+        db.scalar(select(models.User).where(models.User.email == "off2@example.com")).is_active = False
+        db.commit()
+
+    r = client.post("/api/auth/login", json={"email": "off2@example.com", "password": "not-the-password"})
+    assert r.status_code == 401
+    assert r.json()["detail"] == "Invalid email or password"

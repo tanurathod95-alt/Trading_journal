@@ -105,3 +105,38 @@ export async function getHistoricalTrades(
   }
   return rows
 }
+
+/** Upstox's own bounds for one historical-trades page: page_size must be between 1 and 5000. */
+export const UPSTOX_MAX_PAGE_SIZE = 5000
+
+/**
+ * One page of executed trades between two dates (inclusive) from `/charges/historical-trades`. Upstox only serves the
+ * last three financial years (error UDAPI1093 otherwise); pages count from 1. `segment` is optional (EQ, FO, COM, CD, MF).
+ */
+export async function getHistoricalTradesPage(
+  accessToken: string,
+  params: { startDate: string; endDate: string; page: number; pageSize?: number; segment?: string },
+): Promise<UpstoxTradeRow[]> {
+  const url = new URL(`${BASE_URL}/charges/historical-trades`)
+  url.searchParams.set('start_date', params.startDate)
+  url.searchParams.set('end_date', params.endDate)
+  if (params.segment) url.searchParams.set('segment', params.segment)
+  url.searchParams.set('page_number', String(params.page))
+  url.searchParams.set('page_size', String(params.pageSize ?? UPSTOX_MAX_PAGE_SIZE))
+
+  let response: Response
+  try {
+    response = await fetch(url.toString(), { method: 'GET', headers: authHeaders(accessToken) })
+  } catch {
+    throw new UpstoxApiError('Could not reach Upstox (network error or blocked by CORS).', 'network')
+  }
+
+  const body = await response.json().catch(() => null)
+  if (!response.ok || body?.status !== 'success') {
+    const kind = response.status === 401 ? 'auth' : response.status === 429 ? 'network' : 'data'
+    const first = body?.errors?.[0]
+    const detail = first?.message ?? `Unable to load historical trades (HTTP ${response.status})`
+    throw new UpstoxApiError(first?.errorCode ? `${detail} (${first.errorCode})` : detail, kind)
+  }
+  return (body.data ?? []) as UpstoxTradeRow[]
+}

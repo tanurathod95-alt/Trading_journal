@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DBSession
 
 from . import models
+from .observability import tracked
 
 _ACCOUNT_ROLE_RANK: dict[models.AccountRole, int] = {
     models.AccountRole.VIEWER: 1,
@@ -18,6 +19,7 @@ _WORKSPACE_ROLE_RANK: dict[models.WorkspaceRole, int] = {
 }
 
 
+@tracked("authz.require_workspace_member")
 def require_workspace_member(
     db: DBSession, workspace_id: str, user: models.User, min_role: models.WorkspaceRole = models.WorkspaceRole.ADMIN
 ) -> models.WorkspaceMember:
@@ -35,6 +37,7 @@ def require_workspace_member(
     return membership
 
 
+@tracked("authz.require_portfolio_member")
 def require_portfolio_member(
     db: DBSession, portfolio_id: str, user: models.User, min_role: models.AccountRole = models.AccountRole.VIEWER
 ) -> models.PortfolioMember:
@@ -52,6 +55,7 @@ def require_portfolio_member(
     return membership
 
 
+@tracked("authz.require_account_member")
 def require_account_member(
     db: DBSession, trading_account_id: str, user: models.User, min_role: models.AccountRole = models.AccountRole.VIEWER
 ) -> models.AccountMember:

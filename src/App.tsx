@@ -6,7 +6,6 @@ import {
   CalendarDays,
   CandlestickChart,
   CheckCircle2,
-  ChevronDown,
   Clock3,
   Download,
   Eye,
@@ -28,7 +27,6 @@ import {
   Plus,
   RotateCcw,
   Search,
-  Settings,
   ShieldCheck,
   Sun,
   Target,
@@ -36,6 +34,7 @@ import {
   Unlink,
   User,
   X,
+  Upload,
   Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
@@ -45,6 +44,7 @@ import * as XLSX from 'xlsx'
 import './App.css'
 import { db } from './database/db'
 import {
+  deleteAccount,
   deleteAttachmentsByTradeId,
   deleteTradeById,
   exportBackupBundle,
@@ -63,12 +63,15 @@ import {
   toTradeFromDraft,
 } from './services/journalService'
 import type { Account, BackupBundle, Trade, TradeDraft, TradingSegment } from './types'
-import { ApiError, type TradingAccountApi } from './workspace/api'
+import { ApiError, workspaceApi, type TradingAccountApi } from './workspace/api'
+import { useWorkspaceAuth } from './workspace/WorkspaceAuthContext'
 import {
   deleteBusinessTrade,
   fetchBusinessAccountWithTrades,
   fetchRemoteOnlyAccountsWithTrades,
   saveBusinessTrade,
+  toLocalTrade,
+  toSyntheticAccount,
 } from './workspace/tradeSync'
 import {
   calculateTradeStatus,
@@ -95,6 +98,9 @@ import { syncUpstoxTrades } from './services/brokerSync/upstox/upstoxTradeSync'
 import { syncDhanTrades } from './services/brokerSync/dhan/dhanTradeSync'
 import { buildZerodhaLoginUrl, exchangeZerodhaRequestToken } from './services/brokerSync/zerodha/zerodhaAuth'
 import { syncZerodhaTrades } from './services/brokerSync/zerodha/zerodhaTradeSync'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { TradeHistorySync } from './components/TradeHistorySync'
+import { ImportTradesModal } from './components/ImportTradesModal'
 import { clearCredentials as clearDhanCredentials, loadCredentials as loadDhanCredentials, saveCredentials as saveDhanCredentials } from './services/brokerSync/secureCredentialStore'
 import {
   clearAngelOneCredentials,
@@ -109,7 +115,7 @@ import upstoxLogo from './assets/upstox-logo.png'
 import zerodhaLogo from './assets/zerodha-logo.png'
 import dhanLogo from './assets/dhan-logo.png'
 
-type TabKey = 'dashboard' | 'journal' | 'open-trades' | 'calendar' | 'analytics' | 'accounts' | 'settings'
+type TabKey = 'dashboard' | 'journal' | 'open-trades' | 'calendar' | 'analytics' | 'accounts' | 'broker' | 'backup'
 
 const navItems: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -118,14 +124,15 @@ const navItems: Array<{ key: TabKey; label: string; icon: React.ComponentType<{ 
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
   { key: 'accounts', label: 'Accounts', icon: Landmark },
-  { key: 'settings', label: 'Settings', icon: Settings },
+  { key: 'broker', label: 'Broker Connection', icon: Link2 },
+  { key: 'backup', label: 'Data & Backup', icon: Download },
 ]
 
 const bottomNavKeys: TabKey[] = ['dashboard', 'journal', 'open-trades', 'analytics', 'accounts']
 const bottomNavItems = bottomNavKeys.map((key) => navItems.find((item) => item.key === key)!)
 
-// Tabs that only exist to modify data (account management, backup restore).
-const mutationTabKeys: TabKey[] = ['accounts', 'settings']
+// Tabs that only exist to modify data (account management, backup restore, broker connections).
+const mutationTabKeys: TabKey[] = ['accounts', 'broker', 'backup']
 
 const brokerPalette = ['#2563EB', '#F59E0B', '#7C3AED', '#0D9488', '#DB2777', '#0EA5E9']
 
@@ -149,6 +156,8 @@ const getInitials = (name: string): string => {
 }
 
 const getAccountAlias = (account: Account): string => account.alias?.trim() || getInitials(account.accountName)
+
+const consumedBrokerAuthCodes = new Set<string>()
 
 const getGreeting = (): string => {
   const hour = new Date().getHours()
@@ -254,56 +263,36 @@ interface AppProps {
   onTabSelect?: () => void
   /** When set, shows a "← Modes" button at the top of the sidebar (Personal / View, which have no WorkspaceBar of their own to host it). */
   onGoHome?: () => void
+  /**
+   * Staff "view as customer": show this customer's real dashboard (read-only, same screen they see) from an open
+   * admin view session instead of the signed-in user's own data. Always used together with mode="view".
+   */
+  supportViewId?: string
+  /** Called once the support view's data has loaded (or failed), with the customer's display name. */
+  onSupportLoaded?: (info: { displayName: string; truncated: boolean; error?: string }) => void
 }
 
-function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPage, onTabSelect, onGoHome }: AppProps) {
+function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPage, onTabSelect, onGoHome, supportViewId, onSupportLoaded }: AppProps) {
   const isPersonal = mode === 'personal'
+  const isBusiness = mode === 'business'
+  const { createAccount: createBusinessAccount, refreshAccounts: refreshBusinessAccounts } = useWorkspaceAuth()
   // Business mode is read-only as a whole only when every account in it is VIEWER-only; a mixed owner+viewer
   // list stays writable overall, with each VIEWER-role account individually write-protected via remoteOnlyAccountIds below.
   const readOnly = mode === 'view' || (mode === 'business' && businessAccounts.length > 0 && businessAccounts.every((a) => a.role === 'VIEWER'))
-  const visibleNavItems = isPersonal ? navItems : navItems.filter((item) => !mutationTabKeys.includes(item.key))
-  const visibleBottomNavItems = isPersonal ? bottomNavItems : bottomNavItems.filter((item) => !mutationTabKeys.includes(item.key))
+  // View mode is read-only (shared accounts only) — hide every mutation tab. The Accounts tab shows
+  // in both Personal and Business (same card layout); Business's Add/Edit route to the backend
+  // account modal instead of the local Dexie form since those accounts aren't local records.
+  const visibleNavItems = mode === 'view'
+    ? navItems.filter((item) => !mutationTabKeys.includes(item.key))
+    : navItems.filter((item) => item.key !== 'accounts' || isPersonal || isBusiness)
+  const visibleBottomNavItems = mode === 'view'
+    ? bottomNavItems.filter((item) => !mutationTabKeys.includes(item.key))
+    : bottomNavItems.filter((item) => item.key !== 'accounts' || isPersonal || isBusiness)
 
-  const settingsSubItems: Array<{ key: 'profile' | 'broker' | 'data'; label: string }> = [
-    { key: 'profile', label: 'Profile' },
-    { key: 'broker', label: 'Broker Connection' },
-    { key: 'data', label: 'Data & Backup' },
-  ]
-
-  /** Renders one sidebar nav item — "Settings" expands into an indented submenu instead of
-   * navigating directly, since it owns three sub-pages (settingsTab) rather than one. Shared
-   * between the desktop sidebar and the mobile drawer so both stay in sync automatically. */
+  /** Renders one sidebar nav item. Shared between the desktop sidebar and the mobile drawer so
+   * both stay in sync automatically. */
   function renderNavItem(item: (typeof navItems)[number], afterClick: () => void): React.ReactNode {
     const Icon = item.icon
-
-    if (item.key === 'settings') {
-      const expanded = settingsExpanded
-      return (
-        <div key={item.key} className="nav-item-group">
-          <button
-            type="button"
-            className={shownTab === 'settings' ? 'nav-item active' : 'nav-item'}
-            onClick={() => setSettingsExpanded((v) => !v)}
-          >
-            <Icon size={18} />
-            <span className="nav-label">{item.label}</span>
-            <ChevronDown size={14} className={expanded ? 'nav-item-chevron expanded' : 'nav-item-chevron'} />
-          </button>
-          <div className={expanded ? 'nav-submenu expanded' : 'nav-submenu'}>
-            {settingsSubItems.map((sub) => (
-              <button
-                key={sub.key}
-                type="button"
-                className={shownTab === 'settings' && settingsTab === sub.key ? 'nav-subitem active' : 'nav-subitem'}
-                onClick={() => { setActiveTab('settings'); setSettingsTab(sub.key); afterClick() }}
-              >
-                {sub.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )
-    }
 
     return (
       <button
@@ -325,12 +314,20 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   // existing rendering/filtering/export code; see workspace/tradeSync.ts.
   const [remoteOnlyAccountIds, setRemoteOnlyAccountIds] = useState<Set<string>>(new Set())
   const [selectedAccount, setSelectedAccount] = useState<string>('all')
+  // Broker Connection follows the main account switcher above instead of having its own picker —
+  // "all" falls back to the first non-archived account so there's always a concrete account to
+  // save credentials against.
+  const brokerAccountId = selectedAccount !== 'all' ? selectedAccount : (accounts.find((a) => !a.isArchived)?.id ?? '')
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
   const shownTab = extraPage ? null : activeTab
   const [tradeFormOpen, setTradeFormOpen] = useState(false)
   const [quickMode, setQuickMode] = useState(false)
   const [reasonCustomMode, setReasonCustomMode] = useState(false)
   const [accountFormOpen, setAccountFormOpen] = useState(false)
+  const [businessAccountFormOpen, setBusinessAccountFormOpen] = useState(false)
+  const [businessAccountDraft, setBusinessAccountDraft] = useState({ id: '', name: '', broker: '', accountType: 'Trading' })
+  const [businessAccountFormError, setBusinessAccountFormError] = useState('')
+  const [businessAccountSubmitting, setBusinessAccountSubmitting] = useState(false)
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [formError, setFormError] = useState('')
@@ -367,8 +364,32 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [angelOneSyncing, setAngelOneSyncing] = useState(false)
   const [angelOneSyncResult, setAngelOneSyncResult] = useState<string | null>(null)
   const [upstoxClientId, setUpstoxClientId] = useState('')
-  const [upstoxAccessToken, setUpstoxAccessToken] = useState<string | null>(null)
+  // Upstox access tokens are per account (a token belongs to whichever Upstox login the user did
+  // while that account was active). Kept in sessionStorage so they also survive the full-page
+  // reload of the OAuth redirect; Upstox expires them daily anyway, so nothing longer-lived is needed.
+  const [upstoxTokens, setUpstoxTokens] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem('upstox-tokens') ?? '{}') as Record<string, string>
+    } catch {
+      return {}
+    }
+  })
+  const upstoxAccessToken: string | null = upstoxTokens[brokerAccountId] ?? null
+  const updateUpstoxToken = (accountId: string, token: string | null): void => {
+    setUpstoxTokens((current) => {
+      const next = { ...current }
+      if (token) next[accountId] = token
+      else delete next[accountId]
+      try {
+        sessionStorage.setItem('upstox-tokens', JSON.stringify(next))
+      } catch {
+        // storage unavailable — token just won't survive a reload
+      }
+      return next
+    })
+  }
   const [upstoxConnecting, setUpstoxConnecting] = useState(false)
+  const [upstoxConnectError, setUpstoxConnectError] = useState<string | null>(null)
   const [upstoxSyncAccountId, setUpstoxSyncAccountId] = useState('')
   const [upstoxSyncing, setUpstoxSyncing] = useState(false)
   const [upstoxSyncResult, setUpstoxSyncResult] = useState<string | null>(null)
@@ -383,14 +404,12 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const [zerodhaSyncAccountId, setZerodhaSyncAccountId] = useState('')
   const [zerodhaSyncing, setZerodhaSyncing] = useState(false)
   const [zerodhaSyncResult, setZerodhaSyncResult] = useState<string | null>(null)
-  const [settingsTab, setSettingsTab] = useState<'profile' | 'broker' | 'data'>('profile')
-  const [settingsExpanded, setSettingsExpanded] = useState(false)
   const [openBrokerModal, setOpenBrokerModal] = useState<'angelone' | 'upstox' | 'dhan' | 'zerodha' | null>(null)
+  const [importModalOpen, setImportModalOpen] = useState(false)
   const [angelOneRevealed, setAngelOneRevealed] = useState({ apiKey: false, pin: false, totpSecret: false })
   const [profileName, setProfileName] = useState('')
   const [profileModalOpen, setProfileModalOpen] = useState(false)
   const [profileNameDraft, setProfileNameDraft] = useState('')
-  const [settingsNameDraft, setSettingsNameDraft] = useState('')
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
       const stored = localStorage.getItem('journal-theme')
@@ -402,13 +421,6 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     }
     return 'light'
   })
-
-  useEffect(() => {
-    if (shownTab === 'settings') {
-      setSettingsExpanded(true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownTab])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -425,9 +437,27 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     // accounts shared with the user as VIEWER, never their own.
     const nextAccounts = isPersonal ? await getAccounts() : []
     const nextTrades = isPersonal ? await getTrades() : []
-    const storedName = await getProfileName()
+    let storedName = supportViewId ? '' : await getProfileName()
     let remote: { accounts: Account[]; trades: Trade[] } = { accounts: [], trades: [] }
-    if (mode === 'view') {
+    if (supportViewId) {
+      try {
+        const data = await workspaceApi.adminViewAsData(supportViewId)
+        remote = {
+          // Support sees the customer's real account names (as initials in the small chip), not the "(shared, read-only)" labels used for shared accounts.
+          accounts: data.accounts.map((a) => ({
+            ...toSyntheticAccount(a),
+            alias: a.name.split(/\s+/).filter(Boolean).map((word) => word[0]).join('').slice(0, 3).toUpperCase() || a.name.slice(0, 2).toUpperCase(),
+          })),
+          trades: data.trades.map(toLocalTrade),
+        }
+        storedName = data.user.display_name
+        onSupportLoaded?.({ displayName: data.user.display_name, truncated: data.truncated })
+      } catch (err) {
+        const error = err instanceof ApiError ? err.message : 'Could not load this customer\'s dashboard.'
+        setMessage(error)
+        onSupportLoaded?.({ displayName: '', truncated: false, error })
+      }
+    } else if (mode === 'view') {
       remote = await fetchRemoteOnlyAccountsWithTrades(['VIEWER'])
     } else if (mode === 'business' && businessAccounts.length > 0) {
       try {
@@ -444,8 +474,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     const viewerOnlyBusinessIds = new Set(businessAccounts.filter((a) => a.role === 'VIEWER').map((a) => a.id))
     setRemoteOnlyAccountIds(new Set(mode === 'view' ? remote.accounts.map((a) => a.id) : viewerOnlyBusinessIds))
     setProfileName(storedName)
-    setSettingsNameDraft(storedName)
-    if (!storedName) {
+    if (!storedName && !supportViewId) {
       setProfileModalOpen(true)
     }
     setIsLoading(false)
@@ -473,24 +502,32 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
 
   useEffect(() => {
     const unsubscribe = angelOneProvider.onStatusChange(setAngelOneStatus)
-    void hasAngelOneCredentials().then(setAngelOneHasSaved)
-    void loadAngelOneCredentials().then((saved) => {
-      if (saved) {
-        setAngelOneDraft(saved)
-      }
-    })
     return unsubscribe
   }, [])
 
   useEffect(() => {
-    const DHAN_BROKER_ID = 'dhan'
-    void loadDhanCredentials<{ clientId: string; accessToken: string }>(DHAN_BROKER_ID).then((saved) => {
-      if (saved) {
-        setDhanDraft(saved)
-        setDhanConnected(true)
-      }
+    if (!brokerAccountId) {
+      setAngelOneHasSaved(false)
+      setAngelOneDraft({ apiKey: '', clientCode: '', pin: '', totpSecret: '' })
+      return
+    }
+    void hasAngelOneCredentials(brokerAccountId).then(setAngelOneHasSaved)
+    void loadAngelOneCredentials(brokerAccountId).then((saved) => {
+      setAngelOneDraft(saved ?? { apiKey: '', clientCode: '', pin: '', totpSecret: '' })
     })
-  }, [])
+  }, [brokerAccountId])
+
+  useEffect(() => {
+    if (!brokerAccountId) {
+      setDhanDraft({ clientId: '', accessToken: '' })
+      setDhanConnected(false)
+      return
+    }
+    void loadDhanCredentials<{ clientId: string; accessToken: string }>(`dhan:${brokerAccountId}`).then((saved) => {
+      setDhanDraft(saved ?? { clientId: '', accessToken: '' })
+      setDhanConnected(Boolean(saved))
+    })
+  }, [brokerAccountId])
 
   useEffect(() => {
     void getUpstoxClientId().then(setUpstoxClientId)
@@ -504,22 +541,43 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     const code = params.get('code')
     const requestToken = params.get('request_token')
     if (!code && !requestToken) return
+    // Broker auth codes are single-use; StrictMode runs this effect twice in dev, and the
+    // second exchange of the same code always fails — so each code is only exchanged once.
+    const authKey = (code ?? requestToken) as string
+    if (consumedBrokerAuthCodes.has(authKey)) return
+    consumedBrokerAuthCodes.add(authKey)
 
     void (async () => {
       if (code) {
+        // The redirect back from Upstox is a full page reload, so every piece of React state
+        // (including which tab/modal was open) resets to its default — without this, the user
+        // lands back on the Dashboard instead of staying on Broker Connection.
+        setActiveTab('broker')
+        setOpenBrokerModal('upstox')
         setUpstoxConnecting(true)
+        setUpstoxConnectError(null)
         try {
           const clientId = await getUpstoxClientId()
           const redirectUri = window.location.origin + window.location.pathname
           const token = await exchangeUpstoxCode(code, clientId, redirectUri)
-          setUpstoxAccessToken(token)
+          // Attach the token to the account that started the connect (remembered before the redirect).
+          const pendingAccountId = sessionStorage.getItem('upstox-pending-account')
+          sessionStorage.removeItem('upstox-pending-account')
+          if (pendingAccountId) {
+            updateUpstoxToken(pendingAccountId, token)
+            setSelectedAccount(pendingAccountId)
+          }
           setMessage('Upstox connected.')
         } catch (error) {
-          setMessage(error instanceof Error ? error.message : 'Could not complete Upstox connection.')
+          const errorMessage = error instanceof Error ? error.message : 'Could not complete Upstox connection.'
+          setUpstoxConnectError(errorMessage)
+          setMessage(errorMessage)
         } finally {
           setUpstoxConnecting(false)
         }
       } else if (requestToken) {
+        setActiveTab('broker')
+        setOpenBrokerModal('zerodha')
         setZerodhaConnecting(true)
         try {
           const apiKey = await getZerodhaApiKey()
@@ -887,7 +945,11 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
       setMessage('Fill in all Angel One fields before connecting.')
       return
     }
-    await saveAngelOneCredentials(angelOneDraft)
+    if (!brokerAccountId) {
+      setMessage('Select an account before connecting Angel One.')
+      return
+    }
+    await saveAngelOneCredentials(brokerAccountId, angelOneDraft)
     setAngelOneHasSaved(true)
     try {
       await angelOneProvider.connect(angelOneDraft)
@@ -905,9 +967,10 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   }
 
   const handleAngelOneForget = async (): Promise<void> => {
+    if (!brokerAccountId) return
     await angelOneProvider.disconnect()
     marketDataService.setProvider(null)
-    await clearAngelOneCredentials()
+    await clearAngelOneCredentials(brokerAccountId)
     setAngelOneHasSaved(false)
     setAngelOneDraft({ apiKey: '', clientCode: '', pin: '', totpSecret: '' })
     setMessage('Saved Angel One credentials removed from this device.')
@@ -971,13 +1034,18 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
       setMessage('Enter your Upstox Client ID before connecting.')
       return
     }
+    if (!brokerAccountId) {
+      setMessage('Select an account before connecting Upstox.')
+      return
+    }
     await saveUpstoxClientId(clientId)
+    sessionStorage.setItem('upstox-pending-account', brokerAccountId)
     const redirectUri = window.location.origin + window.location.pathname
     window.location.href = buildUpstoxAuthorizationUrl({ clientId, redirectUri })
   }
 
   const handleUpstoxDisconnect = (): void => {
-    setUpstoxAccessToken(null)
+    updateUpstoxToken(brokerAccountId, null)
     setMessage('Upstox disconnected.')
   }
 
@@ -1015,8 +1083,6 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     }
   }
 
-  const DHAN_BROKER_ID = 'dhan'
-
   const handleDhanSave = async (): Promise<void> => {
     const clientId = dhanDraft.clientId.trim()
     const accessToken = dhanDraft.accessToken.trim()
@@ -1024,13 +1090,18 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
       setMessage('Enter both your Dhan Client ID and Access Token.')
       return
     }
-    await saveDhanCredentials(DHAN_BROKER_ID, { clientId, accessToken })
+    if (!brokerAccountId) {
+      setMessage('Select an account before connecting Dhan.')
+      return
+    }
+    await saveDhanCredentials(`dhan:${brokerAccountId}`, { clientId, accessToken })
     setDhanConnected(true)
     setMessage('Dhan connected.')
   }
 
   const handleDhanForget = async (): Promise<void> => {
-    await clearDhanCredentials(DHAN_BROKER_ID)
+    if (!brokerAccountId) return
+    await clearDhanCredentials(`dhan:${brokerAccountId}`)
     setDhanDraft({ clientId: '', accessToken: '' })
     setDhanConnected(false)
     setMessage('Dhan credentials removed from this device.')
@@ -1213,7 +1284,6 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     const finalName = profileNameDraft.trim() || 'Trader'
     await saveProfileName(finalName)
     setProfileName(finalName)
-    setSettingsNameDraft(finalName)
     setProfileModalOpen(false)
     setProfileNameDraft('')
   }
@@ -1221,18 +1291,6 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
   const handleSaveOnboardingName = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     await commitOnboardingName()
-  }
-
-  const handleUpdateSettingsName = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
-    event.preventDefault()
-    const finalName = settingsNameDraft.trim()
-    if (!finalName) {
-      setMessage('Name cannot be empty.')
-      return
-    }
-    await saveProfileName(finalName)
-    setProfileName(finalName)
-    setMessage('Name updated.')
   }
 
   const openAccountForm = (record?: Account): void => {
@@ -1277,6 +1335,60 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     await refreshAfterTradeAction()
   }
 
+  const openBusinessAccountForm = (record?: Account): void => {
+    if (!isBusiness) return
+    setBusinessAccountFormError('')
+    setBusinessAccountDraft(
+      record
+        ? { id: record.id, name: record.accountName, broker: record.brokerName, accountType: record.accountType }
+        : { id: '', name: '', broker: '', accountType: 'Trading' },
+    )
+    setBusinessAccountFormOpen(true)
+  }
+
+  const handleBusinessAccountSave = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault()
+    setBusinessAccountFormError('')
+
+    if (!businessAccountDraft.name.trim() || !businessAccountDraft.broker.trim()) {
+      setBusinessAccountFormError('Account name and broker are required.')
+      return
+    }
+
+    setBusinessAccountSubmitting(true)
+    try {
+      if (businessAccountDraft.id) {
+        await workspaceApi.updateAccount(businessAccountDraft.id, {
+          name: businessAccountDraft.name.trim(),
+          broker_name: businessAccountDraft.broker.trim(),
+          account_type: businessAccountDraft.accountType,
+        })
+        await refreshBusinessAccounts()
+      } else {
+        await createBusinessAccount(businessAccountDraft.name.trim(), businessAccountDraft.broker.trim(), businessAccountDraft.accountType)
+      }
+      setBusinessAccountFormOpen(false)
+      setMessage('Account saved.')
+    } catch (err) {
+      setBusinessAccountFormError(err instanceof ApiError ? err.message : 'Could not save the account.')
+    } finally {
+      setBusinessAccountSubmitting(false)
+    }
+  }
+
+  const handleDeleteBusinessAccount = async (account: Account): Promise<void> => {
+    if (!window.confirm(`Delete "${account.accountName}"? This cannot be undone.`)) {
+      return
+    }
+    try {
+      await workspaceApi.deleteAccount(account.id)
+      await refreshBusinessAccounts()
+      setMessage('Account deleted.')
+    } catch (err) {
+      setMessage(err instanceof ApiError ? err.message : 'Could not delete the account.')
+    }
+  }
+
   const handleArchiveAccount = async (accountId: string): Promise<void> => {
     const account = accounts.find((item) => item.id === accountId)
     if (!account) {
@@ -1302,6 +1414,19 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
     const updated: Account = { ...account, isArchived: false, updatedAt: new Date().toISOString() }
     await saveAccount(updated)
     setMessage('Account restored.')
+    await refreshAfterTradeAction()
+  }
+
+  const handleDeleteLocalAccount = async (accountId: string): Promise<void> => {
+    const account = accounts.find((item) => item.id === accountId)
+    if (!account) {
+      return
+    }
+    if (!window.confirm(`Permanently delete "${account.accountName}" and all its trades? This cannot be undone.`)) {
+      return
+    }
+    await deleteAccount(accountId)
+    setMessage('Account deleted.')
     await refreshAfterTradeAction()
   }
 
@@ -1610,6 +1735,12 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
               <button type="button" className="close-btn" aria-label="Close menu" onClick={() => setMobileMenuOpen(false)}>×</button>
             </div>
             <nav className="mobile-menu-nav">
+              {onGoHome && (
+                <button type="button" className="nav-item sidebar-back-btn" onClick={() => { onGoHome(); setMobileMenuOpen(false) }}>
+                  <ArrowLeft size={18} />
+                  <span className="nav-label">Modes</span>
+                </button>
+              )}
               {visibleNavItems.map((item) => renderNavItem(item, () => { onTabSelect?.(); setMobileMenuOpen(false) }))}
               {extraNav.map((item) => {
                 const Icon = item.icon
@@ -1655,32 +1786,30 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           </div>
         </div>
 
-        {mode !== 'business' && (
-          <div className="header-center">
-            <div className="account-selector-wrap">
-              <div className="eyebrow">Trading Account</div>
-              <div className="account-selector-row">
-                <select
-                  value={selectedAccount}
-                  aria-label="Trading account"
-                  onChange={(event) => setSelectedAccount(event.target.value)}
-                >
-                  <option value="all">All Accounts</option>
-                  {accountOptions.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {getAccountAlias(account)}
-                    </option>
-                  ))}
-                </select>
-                {isPersonal && (
-                  <button type="button" className="icon-btn" aria-label="Add trading account" onClick={() => openAccountForm()}>
-                    <Plus size={16} />
-                  </button>
-                )}
-              </div>
+        <div className="header-center">
+          <div className="account-selector-wrap">
+            <div className="eyebrow">{isBusiness ? 'Active Business Account' : 'Trading Account'}</div>
+            <div className="account-selector-row">
+              <select
+                value={selectedAccount}
+                aria-label="Trading account"
+                onChange={(event) => setSelectedAccount(event.target.value)}
+              >
+                <option value="all">All Accounts</option>
+                {accountOptions.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {getAccountAlias(account)}
+                  </option>
+                ))}
+              </select>
+              {isPersonal && (
+                <button type="button" className="icon-btn" aria-label="Add trading account" onClick={() => openAccountForm()}>
+                  <Plus size={16} />
+                </button>
+              )}
             </div>
           </div>
-        )}
+        </div>
 
         <div className="header-right">
           <div className="search-box">
@@ -1746,6 +1875,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
       </header>
 
       <div className="layout">
+        <ErrorBoundary label="Sidebar">
         <aside className="sidebar">
           {onGoHome && (
             <button type="button" className="nav-item sidebar-back-btn" onClick={onGoHome}>
@@ -1777,7 +1907,9 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
             </div>
           </div>
         </aside>
+        </ErrorBoundary>
 
+        <ErrorBoundary label="Main content">
         <main className="content">
           {message && (
             <div className="status-bar">
@@ -1789,6 +1921,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
           {extraPage}
 
           {shownTab === 'dashboard' && (
+            <ErrorBoundary label="Dashboard">
             <section className="dashboard-panel">
               <div className="dashboard-header-row">
                 <div>
@@ -2022,24 +2155,35 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 )}
               </div>
             </section>
+            </ErrorBoundary>
           )}
 
           {shownTab === 'journal' && (
+            <ErrorBoundary label="Journal">
             <section className="panel">
               <div className="page-header-row">
                 <div>
                   <h2>Journal</h2>
                   <p>{selectedAccountName}{filters.script ? ` • ${filters.script}` : ''}</p>
                 </div>
-                <button
-                  type="button"
-                  className="primary-btn"
-                  disabled={visibleTrades.length === 0}
-                  onClick={() => openExportModal('view')}
-                >
-                  <Download size={16} />
-                  Export
-                </button>
+                {/* Support view: no Import (it would write to the staff member's own browser) and no Export (a copy of a customer's data outside the audit trail). */}
+                {!supportViewId && (
+                <div className="journal-header-actions">
+                  <button type="button" className="secondary-btn" onClick={() => setImportModalOpen(true)}>
+                    <Upload size={16} />
+                    Import
+                  </button>
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    disabled={visibleTrades.length === 0}
+                    onClick={() => openExportModal('view')}
+                  >
+                    <Download size={16} />
+                    Export
+                  </button>
+                </div>
+                )}
               </div>
 
               <div className="toolbar filters">
@@ -2280,9 +2424,11 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               )}
             </section>
+            </ErrorBoundary>
           )}
 
           {shownTab === 'open-trades' && (
+            <ErrorBoundary label="Open Trades">
             <section className="panel">
               <div className="page-header-row">
                 <div>
@@ -2364,9 +2510,11 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               )}
             </section>
+            </ErrorBoundary>
           )}
 
           {shownTab === 'calendar' && (
+            <ErrorBoundary label="Calendar">
             <section className="panel">
               <div className="page-header-row">
                 <div>
@@ -2404,9 +2552,11 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               )}
             </section>
+            </ErrorBoundary>
           )}
 
           {shownTab === 'analytics' && (
+            <ErrorBoundary label="Analytics">
             <section className="panel analytics-panel">
               <div className="page-header-row">
                 <div>
@@ -2528,16 +2678,22 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </>
               )}
             </section>
+            </ErrorBoundary>
           )}
 
-          {shownTab === 'accounts' && isPersonal && (
+          {shownTab === 'accounts' && (isPersonal || isBusiness) && (
+            <ErrorBoundary label="Accounts">
             <section className="panel">
               <div className="page-header-row">
                 <div>
                   <h2>Trading Accounts</h2>
                   <p>Manage your trading accounts and track performance separately.</p>
                 </div>
-                <button type="button" className="primary-btn" onClick={() => openAccountForm()}>
+                <button
+                  type="button"
+                  className="primary-btn"
+                  onClick={() => (isBusiness ? openBusinessAccountForm() : openAccountForm())}
+                >
                   <Plus size={18} />
                   Add Account
                 </button>
@@ -2548,7 +2704,11 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                   <div className="empty-state-icon"><Landmark size={22} /></div>
                   <h3>No trading accounts yet</h3>
                   <p>Add a broker account to start separating your P/L.</p>
-                  <button type="button" className="primary-btn" onClick={() => openAccountForm()}>
+                  <button
+                    type="button"
+                    className="primary-btn"
+                    onClick={() => (isBusiness ? openBusinessAccountForm() : openAccountForm())}
+                  >
                     <Plus size={18} />
                     Add Account
                   </button>
@@ -2597,13 +2757,26 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                         >
                           View Stocks
                         </button>
-                        {!isRemoteOnly && (
+                        {!isRemoteOnly && isBusiness && (
+                          <>
+                            <button type="button" className="secondary-btn" onClick={() => openBusinessAccountForm(account)}>
+                              Edit
+                            </button>
+                            <button type="button" className="secondary-btn" onClick={() => void handleDeleteBusinessAccount(account)}>
+                              Delete
+                            </button>
+                          </>
+                        )}
+                        {!isRemoteOnly && isPersonal && (
                           <>
                             <button type="button" className="secondary-btn" onClick={() => openAccountForm(account)}>
                               Edit
                             </button>
                             <button type="button" className="secondary-btn" onClick={() => void handleArchiveAccount(account.id)}>
                               Archive
+                            </button>
+                            <button type="button" className="secondary-btn" style={{ color: 'var(--danger)' }} onClick={() => void handleDeleteLocalAccount(account.id)}>
+                              Delete
                             </button>
                           </>
                         )}
@@ -2643,6 +2816,9 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                               <RotateCcw size={15} />
                               Restore
                             </button>
+                            <button type="button" className="secondary-btn" style={{ color: 'var(--danger)' }} onClick={() => void handleDeleteLocalAccount(account.id)}>
+                              Delete
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -2651,46 +2827,27 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               )}
             </section>
+            </ErrorBoundary>
           )}
 
-          {shownTab === 'settings' && isPersonal && (
+          {shownTab === 'broker' && mode !== 'view' && (
+            <ErrorBoundary label="Broker Connection">
             <section className="panel settings-panel">
               <div className="page-header-row">
                 <div>
-                  <p className="settings-breadcrumb">Settings / {settingsTab === 'profile' ? 'Profile' : settingsTab === 'broker' ? 'Broker Connection' : 'Data & Backup'}</p>
-                  <h2>{settingsTab === 'profile' ? 'Profile' : settingsTab === 'broker' ? 'Broker Connection' : 'Data & Backup'}</h2>
-                  <p>
-                    {settingsTab === 'profile'
-                      ? 'Manage your account and application preferences.'
-                      : settingsTab === 'broker'
-                        ? 'Connect your trading account with your broker to automatically sync trades, positions and get real-time data.'
-                        : 'Export a backup of your journal, or restore from a previous export.'}
-                  </p>
+                  <h2>Broker Connection</h2>
+                  <p>Connect your trading account with your broker to automatically sync trades, positions and get real-time data.</p>
                 </div>
               </div>
 
-              {settingsTab === 'profile' && (
-                <div className="mini-panel">
-                  <h3 style={{ marginBottom: 4 }}>Profile</h3>
-                  <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: 13 }}>
-                    This name is stored only on this device — every user of this app on their own device sees their own name.
-                  </p>
-                  <form onSubmit={(event) => void handleUpdateSettingsName(event)} style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--muted)', fontWeight: 700, fontSize: 12.5, flex: '1 1 240px' }}>
-                      Display Name
-                      <input
-                        value={settingsNameDraft}
-                        onChange={(event) => setSettingsNameDraft(event.target.value)}
-                        placeholder="Your name"
-                      />
-                    </label>
-                    <button type="submit" className="primary-btn">Save Name</button>
-                  </form>
-                </div>
+              {brokerAccountId && (
+                <p className="broker-active-account-note">
+                  Showing saved credentials for <strong>{getAccountAlias(accountOptions.find((a) => a.id === brokerAccountId) ?? accountOptions[0])}</strong>.
+                  Switch accounts from the <strong>{isBusiness ? 'Active Business Account' : 'Trading Account'}</strong> selector at the top of the page to manage a different account's connections.
+                </p>
               )}
 
-              {settingsTab === 'broker' && (
-                <>
+              <>
                   <div className="broker-secure-banner">
                     <ShieldCheck size={18} />
                     <div>
@@ -2771,6 +2928,20 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                     ))}
                   </div>
 
+                  <TradeHistorySync
+                    accountId={brokerAccountId}
+                    accountName={brokerAccountId ? getAccountAlias(accountOptions.find((a) => a.id === brokerAccountId) ?? accountOptions[0]) : ''}
+                    readOnly={readOnly || remoteOnlyAccountIds.has(brokerAccountId)}
+                    trades={trades}
+                    dhanToken={dhanConnected && dhanDraft.accessToken ? dhanDraft.accessToken : null}
+                    upstoxToken={upstoxAccessToken}
+                    zerodha={zerodhaAccessToken && zerodhaApiKey ? { apiKey: zerodhaApiKey, accessToken: zerodhaAccessToken } : null}
+                    angelOneSession={angelOneStatus.status === 'connected' ? angelOneProvider.getSession() : null}
+                    persistTrade={persistTrade}
+                    onFinished={refreshAfterTradeAction}
+                    onImportCsv={() => setImportModalOpen(true)}
+                  />
+
                   <aside className="quick-info-card">
                     <h4>Quick Info</h4>
 
@@ -2807,10 +2978,9 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                       <p>Your journal data and broker credentials remain on this device — nothing is uploaded to our servers.</p>
                     </div>
                   </aside>
-                </>
-              )}
+              </>
 
-              {settingsTab === 'broker' && openBrokerModal === 'angelone' && (
+              {openBrokerModal === 'angelone' && (
                 <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
                   <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
                     <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
@@ -2858,7 +3028,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                         <div className="password-field">
                           <input
                             type={angelOneRevealed.apiKey ? 'text' : 'password'}
-                            autoComplete="off"
+                            autoComplete="new-password"
                             value={angelOneDraft.apiKey}
                             onChange={(event) => setAngelOneDraft({ ...angelOneDraft, apiKey: event.target.value })}
                             placeholder="From SmartAPI developer console"
@@ -2889,7 +3059,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                         <div className="password-field">
                           <input
                             type={angelOneRevealed.pin ? 'text' : 'password'}
-                            autoComplete="off"
+                            autoComplete="new-password"
                             value={angelOneDraft.pin}
                             onChange={(event) => setAngelOneDraft({ ...angelOneDraft, pin: event.target.value })}
                             placeholder="Trading PIN"
@@ -2909,7 +3079,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                         <div className="password-field">
                           <input
                             type={angelOneRevealed.totpSecret ? 'text' : 'password'}
-                            autoComplete="off"
+                            autoComplete="new-password"
                             value={angelOneDraft.totpSecret}
                             onChange={(event) => setAngelOneDraft({ ...angelOneDraft, totpSecret: event.target.value })}
                             placeholder="From authenticator app setup"
@@ -3006,7 +3176,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               )}
 
-              {settingsTab === 'broker' && openBrokerModal === 'upstox' && (
+              {openBrokerModal === 'upstox' && (
                 <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
                   <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
                     <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
@@ -3064,6 +3234,10 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                       )}
                     </div>
 
+                    {upstoxConnectError && !upstoxAccessToken && (
+                      <p className="broker-status-message is-danger">{upstoxConnectError}</p>
+                    )}
+
                     {upstoxAccessToken && (
                       <>
                         <h4 className="broker-section-title">Sync Trades</h4>
@@ -3095,7 +3269,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               )}
 
-              {settingsTab === 'broker' && openBrokerModal === 'dhan' && (
+              {openBrokerModal === 'dhan' && (
                 <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
                   <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
                     <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
@@ -3140,7 +3314,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                         Access Token <span className="required-dot">*</span>
                         <input
                           type="password"
-                          autoComplete="off"
+                          autoComplete="new-password"
                           value={dhanDraft.accessToken}
                           onChange={(event) => setDhanDraft({ ...dhanDraft, accessToken: event.target.value })}
                           placeholder="Generated from Dhan Web"
@@ -3189,7 +3363,7 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                 </div>
               )}
 
-              {settingsTab === 'broker' && openBrokerModal === 'zerodha' && (
+              {openBrokerModal === 'zerodha' && (
                 <div className="modal-backdrop" onClick={() => setOpenBrokerModal(null)}>
                   <div className="broker-card modal-card" onClick={(event) => event.stopPropagation()}>
                     <button type="button" className="modal-close-btn" aria-label="Close" onClick={() => setOpenBrokerModal(null)}><X size={18} /></button>
@@ -3277,29 +3451,38 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
                   </div>
                 </div>
               )}
-
-              {settingsTab === 'data' && (
-                <div className="mini-panel">
-                  <h3 style={{ marginBottom: 4 }}>Data &amp; Backup</h3>
-                  <p style={{ margin: '0 0 16px', color: 'var(--muted)', fontSize: 13 }}>
-                    Back up, export, or restore your local journal data.
-                  </p>
-                  <div className="settings-grid">
-                    <button type="button" className="secondary-btn" onClick={() => void exportAsJson()}>Export Backup</button>
-                    <button type="button" className="secondary-btn" onClick={() => openExportModal('all')}>
-                      <Download size={16} />
-                      Export All Data
-                    </button>
-                    <label className="import-button secondary-btn">
-                      Import Backup
-                      <input type="file" accept="application/json" onChange={handleImport} />
-                    </label>
-                  </div>
-                </div>
-              )}
             </section>
+            </ErrorBoundary>
+          )}
+
+          {shownTab === 'backup' && mode !== 'view' && (
+            <ErrorBoundary label="Data & Backup">
+            <section className="panel settings-panel">
+              <div className="page-header-row">
+                <div>
+                  <h2>Data &amp; Backup</h2>
+                  <p>Export a backup of your journal, or restore from a previous export.</p>
+                </div>
+              </div>
+
+              <div className="mini-panel">
+                <div className="settings-grid">
+                  <button type="button" className="secondary-btn" onClick={() => void exportAsJson()}>Export Backup</button>
+                  <button type="button" className="secondary-btn" onClick={() => openExportModal('all')}>
+                    <Download size={16} />
+                    Export All Data
+                  </button>
+                  <label className="import-button secondary-btn">
+                    Import Backup
+                    <input type="file" accept="application/json" onChange={handleImport} />
+                  </label>
+                </div>
+              </div>
+            </section>
+            </ErrorBoundary>
           )}
         </main>
+        </ErrorBoundary>
       </div>
 
       {tradeFormOpen && (
@@ -3584,6 +3767,62 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
         </div>
       )}
 
+      {businessAccountFormOpen && (
+        <div className="modal-backdrop" onClick={() => { setBusinessAccountFormOpen(false); setBusinessAccountFormError('') }}>
+          <div className="modal-card small" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{businessAccountDraft.id ? 'Edit Account' : 'Add Account'}</h2>
+              <button type="button" className="close-btn" onClick={() => { setBusinessAccountFormOpen(false); setBusinessAccountFormError('') }}>×</button>
+            </div>
+
+            {businessAccountFormError && (
+              <div className="error-banner">
+                <div className="error-banner-copy">
+                  <strong>Couldn't save account</strong>
+                  <span>{businessAccountFormError}</span>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleBusinessAccountSave} className="account-form">
+              <label>
+                Account Name
+                <input
+                  value={businessAccountDraft.name}
+                  onChange={(event) => setBusinessAccountDraft({ ...businessAccountDraft, name: event.target.value })}
+                />
+              </label>
+              <label>
+                Broker
+                <input
+                  value={businessAccountDraft.broker}
+                  onChange={(event) => setBusinessAccountDraft({ ...businessAccountDraft, broker: event.target.value })}
+                />
+              </label>
+              <label>
+                Account Type
+                <select
+                  value={businessAccountDraft.accountType}
+                  onChange={(event) => setBusinessAccountDraft({ ...businessAccountDraft, accountType: event.target.value })}
+                >
+                  <option value="Trading">Trading</option>
+                  <option value="Commodity">Commodity</option>
+                  <option value="Options">Options</option>
+                  <option value="Business">Business</option>
+                </select>
+              </label>
+
+              <div className="modal-footer">
+                <button type="button" className="secondary-btn" onClick={() => setBusinessAccountFormOpen(false)}>Cancel</button>
+                <button type="submit" className="primary-btn" disabled={businessAccountSubmitting}>
+                  {businessAccountSubmitting ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {profileModalOpen && (
         <div className="modal-backdrop">
           <div className="modal-card small" onClick={(event) => event.stopPropagation()}>
@@ -3624,6 +3863,15 @@ function App({ mode = 'personal', businessAccounts = [], extraNav = [], extraPag
             <img src={selectedTradeAttachment} alt="Trade chart screenshot" />
           </div>
         </div>
+      )}
+
+      {importModalOpen && (
+        <ImportTradesModal
+          accounts={accountOptions}
+          existingTrades={trades}
+          onClose={() => setImportModalOpen(false)}
+          onImported={refreshAfterTradeAction}
+        />
       )}
 
       {exportModalOpen && (

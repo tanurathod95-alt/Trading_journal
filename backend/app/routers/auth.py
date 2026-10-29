@@ -104,6 +104,18 @@ def login(payload: schemas.LoginRequest, request: Request, response: Response, d
         db.commit()
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
+    if not user.is_active:
+        # Only reached with the correct password, so this never reveals that an email is registered.
+        log_event(
+            db,
+            action=AuditAction.LOGIN_FAILED,
+            user_id=user.id,
+            request=request,
+            metadata={"email": user.email, "reason": "account_disabled"},
+        )
+        db.commit()
+        raise HTTPException(status_code=403, detail="This account has been disabled. Please contact support.")
+
     token = _create_session(db, user)
     log_event(db, action=AuditAction.LOGIN_SUCCESS, user_id=user.id, request=request)
     db.commit()
@@ -126,6 +138,22 @@ def logout(request: Request, response: Response, db: DBSession = Depends(get_db)
 @router.get("/me", response_model=schemas.MeOut)
 def me(db: DBSession = Depends(get_db), user: models.User = Depends(get_current_user)) -> schemas.MeOut:
     return _me_payload(db, user)
+
+
+@router.get("/support-access")
+def support_access(db: DBSession = Depends(get_db), user: models.User = Depends(get_current_user)) -> dict:
+    """
+    Every time platform staff opened a read-only "view as" on this account — shown to the customer in their profile so
+    support never looks at their data in secret. Deliberately says only "Platform support", not which person or why.
+    """
+    rows = db.scalars(
+        select(models.ViewAsSession).where(models.ViewAsSession.user_id == user.id).order_by(models.ViewAsSession.started_at.desc()).limit(20)
+    ).all()
+
+    def iso(value: dt.datetime | None) -> str | None:
+        return value.replace(tzinfo=dt.timezone.utc).isoformat().replace("+00:00", "Z") if value else None
+
+    return {"sessions": [{"started_at": iso(r.started_at), "ended_at": iso(r.ended_at), "by": "Platform support"} for r in rows]}
 
 
 @router.post("/forgot-password", response_model=schemas.ForgotPasswordOut)

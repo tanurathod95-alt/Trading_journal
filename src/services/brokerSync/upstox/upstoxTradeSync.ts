@@ -7,7 +7,7 @@ const HISTORICAL_LOOKBACK_DAYS = 90
 /** NSE/BSE = cash equity; everything else (NFO/BFO/MCX/CDS) is a derivative — Upstox's
  * historical-trades endpoint does carry an `option_type` field for F&O rows, which (when
  * present) tells us OPTIONS directly instead of guessing from the symbol suffix like Angel One. */
-function inferSegment(exchange: string, optionType: string | undefined): TradingSegment {
+export function inferSegment(exchange: string, optionType: string | undefined): TradingSegment {
   const ex = exchange.toUpperCase()
   if (ex === 'NSE' || ex === 'BSE') return 'CASH'
   if (optionType === 'CE' || optionType === 'PE') return 'OPTIONS'

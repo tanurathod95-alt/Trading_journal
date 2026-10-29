@@ -6,7 +6,7 @@ export type ZerodhaSyncResult = FillMatchResult
 
 /** Same inference Angel One needed — Kite's trade object doesn't carry a dedicated
  * instrument-type field either, only exchange + tradingsymbol. */
-function inferSegment(exchange: string, tradingSymbol: string): TradingSegment {
+export function inferSegment(exchange: string, tradingSymbol: string): TradingSegment {
   const ex = exchange.toUpperCase()
   if (ex === 'NSE' || ex === 'BSE') return 'CASH'
   const sym = tradingSymbol.toUpperCase()
@@ -24,7 +24,7 @@ function toDateString(value: string | undefined): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function normalizeZerodhaRow(row: ZerodhaTradeRow): NormalizedFill {
+export function normalizeZerodhaRow(row: ZerodhaTradeRow): NormalizedFill {
   // Docs disagree on the field name (quantity vs filled) — accept either, whichever is present.
   const quantity = row.quantity ?? row.filled ?? 0
   return {

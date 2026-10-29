@@ -87,6 +87,11 @@ export async function saveAccount(account: Account): Promise<void> {
   await db.accounts.put(nextRecord)
 }
 
+export async function deleteAccount(accountId: string): Promise<void> {
+  await db.trades.where('accountId').equals(accountId).delete()
+  await db.accounts.delete(accountId)
+}
+
 export async function saveTrade(trade: Trade): Promise<void> {
   const nextTrade = { ...trade, updatedAt: new Date().toISOString() }
   await db.trades.put(nextTrade)

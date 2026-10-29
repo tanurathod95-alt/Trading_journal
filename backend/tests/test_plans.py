@@ -43,10 +43,10 @@ def test_trading_account_creation_is_blocked_once_the_free_plan_limit_is_reached
     assert r.json()["trading_accounts_used"] == 3
 
 
-def test_business_plan_never_blocks_trading_account_creation(client):
+def test_business_plan_never_blocks_trading_account_creation(client, set_plan):
     owner = _signup(client, "plan2b@example.com", "Owner")
     ws_id = owner["workspaces"][0]["id"]
-    client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "BUSINESS"})
+    set_plan(ws_id, "BUSINESS")
 
     for i in range(1, 11):
         r = client.post("/api/accounts", json={"workspace_id": ws_id, "name": f"Account {i}", "broker_name": "Angel One"})
@@ -56,41 +56,25 @@ def test_business_plan_never_blocks_trading_account_creation(client):
     assert r.json()["trading_accounts_used"] == 10
 
 
-def test_owner_can_upgrade_plan_and_limits_change_accordingly(client, db_sessionmaker):
+def test_nobody_can_change_a_plan_through_the_old_workspace_endpoint(client, db_sessionmaker):
+    """
+    That endpoint let any workspace OWNER put themselves on BUSINESS without paying, and later let staff skip the reason /
+    password / CSRF checks. It no longer exists: plans change only through Razorpay checkout or the guarded admin override.
+    """
+    from sqlalchemy import select
+
     owner = _signup(client, "plan3@example.com", "Owner")
     ws_id = owner["workspaces"][0]["id"]
-
-    r = client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "BUSINESS"})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["plan"] == "BUSINESS"
-    assert body["limits"]["max_trading_accounts"] is None
-    assert body["limits"]["max_members_per_account"] is None
+    assert client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "BUSINESS"}).status_code == 405
 
     with db_sessionmaker() as db:
-        rows = db.query(models.AuditLog).filter(models.AuditLog.action == "WORKSPACE_PLAN_CHANGED").all()
-    assert len(rows) == 1
-    assert "BUSINESS" in rows[0].metadata_json
+        db.scalar(select(models.User).where(models.User.email == "plan3@example.com")).platform_role = "DEVELOPER"
+        db.commit()
+    assert client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "BUSINESS"}).status_code == 405  # not even staff
 
-
-def test_non_owner_workspace_admin_cannot_change_plan(client):
-    owner = _signup(client, "plan4@example.com", "Owner")
-    ws_id = owner["workspaces"][0]["id"]
-    r = client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "PRO"})
-    assert r.status_code == 200  # sanity: owner itself can
-
-    # A second workspace's owner has no membership at all in ws_id.
-    client.post("/api/auth/logout")
-    _signup(client, "plan4b@example.com", "Outsider")
-    r = client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "BUSINESS"})
-    assert r.status_code == 404  # not a member, never confirm the workspace exists
-
-
-def test_invalid_plan_name_is_rejected(client):
-    owner = _signup(client, "plan5@example.com", "Owner")
-    ws_id = owner["workspaces"][0]["id"]
-    r = client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "ULTRA_DELUXE"})
-    assert r.status_code == 422
+    assert client.get(f"/api/workspaces/{ws_id}/plan").json()["plan"] == "FREE"
+    with db_sessionmaker() as db:
+        assert db.query(models.AuditLog).filter(models.AuditLog.action == "WORKSPACE_PLAN_CHANGED").count() == 0
 
 
 def test_free_plan_account_seat_limit_blocks_the_third_seat(client):
@@ -105,7 +89,7 @@ def test_free_plan_account_seat_limit_blocks_the_third_seat(client):
     assert r2.status_code == 402
 
 
-def test_upgrading_plan_lifts_the_seat_limit(client):
+def test_upgrading_plan_lifts_the_seat_limit(client, set_plan):
     owner = _signup(client, "plan7@example.com", "Owner")
     ws_id = owner["workspaces"][0]["id"]
     account = _create_account(client, ws_id)
@@ -114,16 +98,16 @@ def test_upgrading_plan_lifts_the_seat_limit(client):
     blocked = client.post(f"/api/accounts/{account['id']}/invitations", json={"email": "seatD@example.com", "role": "VIEWER"})
     assert blocked.status_code == 402
 
-    client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "PRO"})
+    set_plan(ws_id, "PRO")
 
     allowed = client.post(f"/api/accounts/{account['id']}/invitations", json={"email": "seatD@example.com", "role": "VIEWER"})
     assert allowed.status_code == 201
 
 
-def test_business_plan_never_blocks_seats(client):
+def test_business_plan_never_blocks_seats(client, set_plan):
     owner = _signup(client, "plan8@example.com", "Owner")
     ws_id = owner["workspaces"][0]["id"]
-    client.patch(f"/api/workspaces/{ws_id}/plan", json={"plan": "BUSINESS"})
+    set_plan(ws_id, "BUSINESS")
     account = _create_account(client, ws_id)
 
     for i in range(5):

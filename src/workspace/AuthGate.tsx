@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Lock, Mail, ShieldCheck, TrendingUp, Users } from 'lucide-react'
-import { ApiError, workspaceApi } from './api'
+import { Navigate, useLocation } from 'react-router-dom'
+import { ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Lock, Mail } from 'lucide-react'
+import { ApiError, workspaceApi, type Me } from './api'
 import { useWorkspaceAuth } from './WorkspaceAuthContext'
 
 type Screen = 'login' | 'signup' | 'forgot' | 'forgot-sent' | 'reset' | 'reset-done'
@@ -13,8 +14,16 @@ function getTokenFromUrl(): string | null {
   }
 }
 
+/**
+ * Gate for the authenticated app (`/app/*`). Signed-out visitors are sent to
+ * the marketing home page instead of a standalone full-page login screen —
+ * MarketingLayout reads `location.state.openAuth` and opens `AuthModal` on
+ * top of the real homepage, so the login/signup form appears as a popup over
+ * the site rather than replacing it.
+ */
 export function AuthGate({ children }: { children: ReactNode }) {
   const { status } = useWorkspaceAuth()
+  const location = useLocation()
 
   if (status === 'loading') {
     return (
@@ -28,99 +37,67 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (status === 'signed-out') {
-    return <AuthScreens />
+    const resetToken = getTokenFromUrl()
+    return (
+      <Navigate
+        to="/"
+        replace
+        state={{ openAuth: resetToken ? 'reset' : 'login', resetToken: resetToken ?? undefined, from: location.pathname }}
+      />
+    )
   }
 
   return <>{children}</>
 }
 
-const highlights = [
-  { icon: TrendingUp, title: 'Unlimited trading accounts', subtitle: 'Seamlessly manage all your accounts' },
-  { icon: Users, title: 'Share read-only access', subtitle: 'With clients or partners' },
-  { icon: ShieldCheck, title: 'Server-enforced permissions', subtitle: 'Your data, always secure' },
-]
-
-function AuthScreens() {
-  const [screen, setScreen] = useState<Screen>(() => (getTokenFromUrl() ? 'reset' : 'login'))
-  const [resetToken, setResetToken] = useState<string>(() => getTokenFromUrl() ?? '')
+/** The login/signup/forgot-password popup — rendered by MarketingLayout on top of whichever
+ * marketing page is behind it, matching the "modal over the homepage" pattern instead of a
+ * dedicated full-page auth screen. */
+export function AuthModal({
+  initialScreen = 'login',
+  initialResetToken = '',
+  onClose,
+  onAuthenticated,
+}: {
+  initialScreen?: Screen
+  initialResetToken?: string
+  onClose: () => void
+  /** `me` is the freshly logged-in user (null after signup — a brand-new account is never staff). */
+  onAuthenticated: (me: Me | null) => void
+}) {
+  const [screen, setScreen] = useState<Screen>(initialScreen)
+  const [resetToken, setResetToken] = useState<string>(initialResetToken)
 
   return (
-    <div className="ws-auth-screen">
-      <div className="ws-auth-shell">
-        <div className="ws-auth-brand-panel">
-          <div className="ws-auth-brand-chart" aria-hidden="true">
-            <CandlestickGlyph />
-          </div>
+    <div className="ws-modal-backdrop" onClick={onClose}>
+      <div className="ws-auth-modal-card" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="ws-auth-modal-close" aria-label="Close" onClick={onClose}>×</button>
 
-          <a href="/" className="ws-auth-brand-link">
-            <span className="ws-auth-brand-mark">TJ</span>
-            Trading Journal
-          </a>
-          <h1 className="ws-auth-brand-heading">
-            One workspace for your <span className="ws-auth-heading-accent">trading, portfolios</span> and performance.
-          </h1>
-          <p className="ws-auth-brand-sub">
-            Track your trades, analyze performance, and manage multiple accounts — all in one place.
-          </p>
-          <ul className="ws-auth-highlights">
-            {highlights.map(({ icon: Icon, title, subtitle }) => (
-              <li key={title}>
-                <span className="ws-auth-highlight-icon">
-                  <Icon size={16} />
-                </span>
-                <span className="ws-auth-highlight-copy">
-                  <strong>{title}</strong>
-                  <span>{subtitle}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
+        <div className="ws-auth-modal-brand">
+          <span className="ws-auth-brand-mark">TJ</span>
+          Trading Journal
         </div>
 
-        <div className="ws-auth-form-panel">
-          <a href="/" className="ws-auth-back-link">
-            ← Back to home
-          </a>
-
-          {screen === 'login' && <LoginForm onForgot={() => setScreen('forgot')} onSignup={() => setScreen('signup')} />}
-          {screen === 'signup' && <SignupForm onLogin={() => setScreen('login')} />}
-          {screen === 'forgot' && (
-            <ForgotPasswordForm
-              onBack={() => setScreen('login')}
-              onSent={(token) => {
-                setResetToken(token ?? '')
-                setScreen(token ? 'reset' : 'forgot-sent')
-              }}
-            />
-          )}
-          {screen === 'forgot-sent' && <ForgotSentNotice onBack={() => setScreen('login')} />}
-          {screen === 'reset' && (
-            <ResetPasswordForm token={resetToken} onDone={() => setScreen('reset-done')} onBack={() => setScreen('login')} />
-          )}
-          {screen === 'reset-done' && <ResetDoneNotice onLogin={() => setScreen('login')} />}
-        </div>
+        {screen === 'login' && (
+          <LoginForm onForgot={() => setScreen('forgot')} onSignup={() => setScreen('signup')} onSuccess={onAuthenticated} />
+        )}
+        {screen === 'signup' && <SignupForm onLogin={() => setScreen('login')} onSuccess={() => onAuthenticated(null)} />}
+        {screen === 'forgot' && (
+          <ForgotPasswordForm
+            onBack={() => setScreen('login')}
+            onSent={(token) => {
+              setResetToken(token ?? '')
+              setScreen(token ? 'reset' : 'forgot-sent')
+            }}
+          />
+        )}
+        {screen === 'forgot-sent' && <ForgotSentNotice onBack={() => setScreen('login')} />}
+        {screen === 'reset' && (
+          <ResetPasswordForm token={resetToken} onDone={() => setScreen('reset-done')} onBack={() => setScreen('login')} />
+        )}
+        {screen === 'reset-done' && <ResetDoneNotice onLogin={() => setScreen('login')} />}
       </div>
     </div>
-  )
-}
-
-/** A near-invisible decorative candlestick strip for the brand panel — purely visual, no data. */
-function CandlestickGlyph() {
-  const bars = [
-    { x: 0, h: 18, y: 30 },
-    { x: 14, h: 30, y: 18 },
-    { x: 28, h: 14, y: 34 },
-    { x: 42, h: 40, y: 8 },
-    { x: 56, h: 22, y: 26 },
-    { x: 70, h: 34, y: 14 },
-    { x: 84, h: 48, y: 0 },
-  ]
-  return (
-    <svg viewBox="0 0 100 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {bars.map((bar) => (
-        <rect key={bar.x} x={bar.x} y={bar.y} width="7" height={bar.h} rx="1.5" fill="currentColor" />
-      ))}
-    </svg>
   )
 }
 
@@ -168,7 +145,7 @@ function PasswordField({
   )
 }
 
-function LoginForm({ onForgot, onSignup }: { onForgot: () => void; onSignup: () => void }) {
+function LoginForm({ onForgot, onSignup, onSuccess }: { onForgot: () => void; onSignup: () => void; onSuccess: (me: Me) => void }) {
   const { login } = useWorkspaceAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -180,7 +157,8 @@ function LoginForm({ onForgot, onSignup }: { onForgot: () => void; onSignup: () 
     setError(null)
     setSubmitting(true)
     try {
-      await login(email, password)
+      const me = await login(email, password)
+      onSuccess(me)
     } catch (err) {
       // Password is never cleared on error, only re-typing the email is
       // avoided too — this is the single biggest login-conversion killer
@@ -241,7 +219,7 @@ function LoginForm({ onForgot, onSignup }: { onForgot: () => void; onSignup: () 
   )
 }
 
-function SignupForm({ onLogin }: { onLogin: () => void }) {
+function SignupForm({ onLogin, onSuccess }: { onLogin: () => void; onSuccess: () => void }) {
   const { signup } = useWorkspaceAuth()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
@@ -257,6 +235,7 @@ function SignupForm({ onLogin }: { onLogin: () => void }) {
     setSubmitting(true)
     try {
       await signup(email, password, displayName)
+      onSuccess()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.')
     } finally {

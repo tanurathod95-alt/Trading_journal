@@ -27,7 +27,8 @@ export interface DhanTradeRow {
   exchangeSegment: string
   productType: string
   orderType: string
-  tradingSymbol: string
+  tradingSymbol: string | null
+  customSymbol?: string | null
   securityId: string
   tradedQuantity: number
   tradedPrice: number
@@ -46,6 +47,19 @@ export async function getTradeBook(accessToken: string): Promise<DhanTradeRow[]>
   } catch (err) {
     if (err instanceof ApiError) {
       throw new DhanApiError(err.message, err.status === 401 ? 'auth' : 'data')
+    }
+    throw new DhanApiError('Could not reach Dhan.', 'network')
+  }
+}
+
+/** One page of executed trades between two dates (inclusive), from Dhan's v2 trade-history endpoint. Pages count from 0. */
+export async function getTradeHistoryPage(accessToken: string, fromDate: string, toDate: string, page: number): Promise<DhanTradeRow[]> {
+  try {
+    const rows = await workspaceApi.getDhanTradeHistory(accessToken, fromDate, toDate, page)
+    return (Array.isArray(rows) ? rows : []) as DhanTradeRow[]
+  } catch (err) {
+    if (err instanceof ApiError) {
+      throw new DhanApiError(err.message, err.status === 401 ? 'auth' : err.status === 429 || err.status === 502 ? 'network' : 'data')
     }
     throw new DhanApiError('Could not reach Dhan.', 'network')
   }

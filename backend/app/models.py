@@ -43,6 +43,9 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Platform staff role (USER | ADMIN | DEVELOPER) — separate from workspace/account roles.
+    # Plain string like Workspace.plan so adding a role is a one-line change in staff.py.
+    platform_role: Mapped[str] = mapped_column(String(20), default="USER", server_default="USER", nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
 
     memberships: Mapped[list["WorkspaceMember"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -442,3 +445,22 @@ class Session(Base):
     expires_at: Mapped[dt.datetime] = mapped_column(DateTime, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="sessions")
+
+
+class ViewAsSession(Base):
+    """
+    One audited, read-only look at a customer's server-side data by platform staff. Created only after the
+    staff member re-entered their password and gave a reason; auto-closes after 30 minutes without activity.
+    The customer can see that it happened (GET /api/auth/support-access) — support never looks in secret.
+    """
+
+    __tablename__ = "view_as_sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    admin_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    started_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
+    last_seen_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow, nullable=False)
+    ended_at: Mapped[dt.datetime | None] = mapped_column(DateTime, nullable=True)
+    end_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)  # "manual" | "idle" | "replaced"

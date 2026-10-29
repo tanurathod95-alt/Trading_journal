@@ -1,7 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
-import { db } from '../database/db'
 import { ApiError, workspaceApi, type Me, type MyInvitationApi, type MyPortfolioInvitationApi, type TradingAccountApi, type Workspace } from './api'
-import { linkAccountForSharing } from './tradeSync'
 
 interface WorkspaceAuthValue {
   status: 'loading' | 'signed-out' | 'signed-in'
@@ -14,7 +12,7 @@ interface WorkspaceAuthValue {
   accountsError: string | null
   refreshAccounts: () => Promise<void>
   createAccount: (name: string, brokerName: string, accountType: string, contactNumber?: string) => Promise<void>
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<Me>
   signup: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
   myInvitations: MyInvitationApi[]
@@ -112,6 +110,7 @@ export function WorkspaceAuthProvider({ children }: { children: ReactNode }) {
     const result = await workspaceApi.login(email, password)
     setMe(result)
     setStatus('signed-in')
+    return result
   }, [])
 
   const signup = useCallback(async (email: string, password: string, displayName: string) => {
@@ -136,32 +135,11 @@ export function WorkspaceAuthProvider({ children }: { children: ReactNode }) {
       }
       const created = await workspaceApi.createAccount(currentWorkspace.id, name, brokerName, accountType, contactNumber)
 
-      // Immediately create and link a matching LOCAL (Dexie) account too, so
-      // the new account is usable for logging trades right away — no
-      // separate "Link Local Data" step for the common case of creating a
-      // brand-new shared account from scratch. "Link Local Data" still
-      // exists separately for linking an EXISTING local account that
-      // already has trade history.
-      const now = new Date().toISOString()
-      const localAccountId = crypto.randomUUID()
-      await db.accounts.put({
-        id: localAccountId,
-        accountName: created.name,
-        brokerName: created.broker_name,
-        accountType: created.account_type,
-        isArchived: false,
-        createdAt: now,
-        updatedAt: now,
-      })
-      await linkAccountForSharing(localAccountId, created.id).catch(() => {
-        // Non-fatal — the backend account still exists and can be linked
-        // manually later via "Link Local Data" if this best-effort step fails.
-      })
-      // App.tsx (a separate component tree, still fully Dexie-driven) only
-      // loads its local accounts/trades on mount — this tells it to reload
-      // so the new account shows up in the trade-entry dropdown immediately.
-      window.dispatchEvent(new CustomEvent('journal:local-accounts-changed'))
-
+      // Deliberately backend-only — Business accounts must never auto-create a
+      // local (Dexie) counterpart, or they'd leak into the Personal Accounts
+      // tab (which is 100% local-only by design). Anyone who wants a backend
+      // account usable for local/offline trade entry can still link one
+      // explicitly via "Link Local Data" (LinkLocalAccountPanel).
       setAccounts((current) => [...current, created])
       setCurrentAccountId(created.id)
     },

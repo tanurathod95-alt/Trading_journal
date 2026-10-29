@@ -72,10 +72,21 @@ export function matchFills(fills: NormalizedFill[], accountId: string, existingT
   const now = new Date().toISOString()
 
   const usedFillIds = new Set<string>()
+  // Exchange trade ids can repeat on different days, so history sync identifies a fill as `<brokerId>@<date>`. Older syncs
+  // stored the bare broker id. Both forms must count as "already imported", in either direction.
+  const legacyDated = new Set<string>()
   for (const t of existingTrades) {
-    if (t.brokerTradeId) usedFillIds.add(t.brokerTradeId)
-    if (t.brokerExitTradeId) usedFillIds.add(t.brokerExitTradeId)
+    if (t.brokerTradeId) {
+      usedFillIds.add(t.brokerTradeId)
+      legacyDated.add(`${t.brokerTradeId}@${t.tradeDate}`)
+    }
+    if (t.brokerExitTradeId) {
+      usedFillIds.add(t.brokerExitTradeId)
+      legacyDated.add(`${t.brokerExitTradeId}@${t.exitDate}`)
+    }
   }
+  const alreadyImported = (fill: NormalizedFill): boolean =>
+    usedFillIds.has(fill.fillId) || legacyDated.has(fill.fillId) || usedFillIds.has(`${fill.fillId}@${fill.date}`)
 
   const newTrades: Trade[] = []
   const updatedTrades: Trade[] = []
@@ -100,7 +111,7 @@ export function matchFills(fills: NormalizedFill[], accountId: string, existingT
   const sorted = fills.slice().sort((a, b) => a.date.localeCompare(b.date))
 
   for (const fill of sorted) {
-    if (usedFillIds.has(fill.fillId)) {
+    if (alreadyImported(fill)) {
       skipped += 1
       continue
     }

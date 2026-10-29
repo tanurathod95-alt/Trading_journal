@@ -123,3 +123,73 @@ button, input, select, textarea {
   background: var(--bg);
   color: var(--text);
 }
+
+/* ---- Fault-isolation boundaries (src/components/ErrorBoundary.tsx) ---- */
+
+.error-boundary-fullpage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg, #f8fafd);
+}
+
+.error-boundary-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  max-width: 360px;
+  padding: 32px 28px;
+  border-radius: 16px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e5e9f0);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  color: var(--danger, #f87171);
+}
+
+.error-boundary-card h2 {
+  margin: 0;
+  color: var(--text, #0f172a);
+  font-size: 18px;
+}
+
+.error-boundary-card p {
+  margin: 0;
+  color: var(--muted, #6b7d99);
+  font-size: 13.5px;
+}
+
+.error-boundary-inline {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--danger-soft, rgba(248, 113, 113, 0.16));
+  border: 1px solid var(--danger, #f87171);
+  color: var(--danger, #f87171);
+  margin: 16px 0;
+}
+
+.error-boundary-inline strong {
+  display: block;
+  color: var(--text, #0f172a);
+  font-size: 13.5px;
+}
+
+.error-boundary-inline p {
+  margin: 2px 0 0;
+  color: var(--muted, #6b7d99);
+  font-size: 12.5px;
+}
+
+.error-boundary-inline > div {
+  flex: 1;
+}
+
+.error-boundary-inline button {
+  flex-shrink: 0;
+}

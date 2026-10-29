@@ -1,0 +1,473 @@
+/* Admin panel extras. Layout, tables, tabs and status badges are shared with the developer panel (developer.css, `dev-` classes). */
+
+.adm-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.adm-stats-compact {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 280px));
+}
+
+.adm-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-left-width: 4px;
+}
+
+.adm-stat strong {
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-stat small {
+  font-size: 11.5px;
+}
+
+.adm-stat-warn {
+  border-left-color: var(--warning, #f59e0b);
+}
+
+.adm-stat-down {
+  border-left-color: var(--danger, #dc2626);
+}
+
+.adm-clickable {
+  cursor: pointer;
+}
+
+.adm-clickable:hover td,
+.adm-clickable:focus-visible td {
+  background: var(--panel-muted, #f1f5f9);
+}
+
+.adm-clickable:focus-visible {
+  outline: 2px solid var(--primary, #3b82f6);
+  outline-offset: -2px;
+}
+
+.adm-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.adm-refreshing {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.adm-back {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 14px;
+  cursor: pointer;
+}
+
+.adm-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.adm-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.adm-detail-head h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.adm-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.adm-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--panel-muted, #f1f5f9);
+  color: var(--muted, #64748b);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.adm-note-warn {
+  background: var(--warning-soft, #fef3c7);
+  color: var(--warning, #b45309);
+  margin-bottom: 12px;
+}
+
+.adm-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.adm-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  min-width: 0;
+}
+
+.adm-fact strong {
+  font-size: 13.5px;
+  word-break: break-all;
+}
+
+.adm-card {
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.adm-card h3 {
+  margin: 0;
+  font-size: 14.5px;
+}
+
+.adm-inner-table {
+  border-radius: 10px;
+}
+
+.adm-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+
+.adm-warn {
+  color: var(--warning, #b45309);
+  font-weight: 700;
+}
+
+.adm-subtabs {
+  margin-top: 4px;
+}
+
+.adm-hint {
+  margin: 10px 0 0;
+}
+
+.adm-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--muted, #64748b);
+}
+
+.adm-date input {
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--panel, #fff);
+  color: var(--text, #0f172a);
+  padding: 0 8px;
+}
+
+@media (max-width: 640px) {
+  .adm-pager {
+    justify-content: space-between;
+  }
+}
+
+/* ---- staff actions, dialogs and "view as" ---- */
+
+.adm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.adm-flash {
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: var(--success-soft, #dcfce7);
+  color: var(--success, #16a34a);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.adm-btn-danger {
+  border-color: var(--danger, #dc2626);
+  color: var(--danger, #dc2626);
+}
+
+.adm-btn-danger:hover:not(:disabled) {
+  background: var(--danger, #dc2626);
+  color: #fff;
+}
+
+.adm-dialog {
+  max-width: 520px;
+  display: grid;
+  gap: 14px;
+}
+
+.adm-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.adm-dialog-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.adm-dialog-intro {
+  margin: 0;
+  color: var(--muted, #64748b);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.adm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.adm-field {
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.adm-field textarea,
+.adm-field input {
+  border-radius: 10px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--panel, #fff);
+  color: var(--text, #0f172a);
+  padding: 9px 11px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.adm-linkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--panel-muted, #f1f5f9);
+  border: 1px dashed var(--border, #cbd5e1);
+}
+
+.adm-linkbox code {
+  flex: 1;
+  word-break: break-all;
+  user-select: all;
+}
+
+.adm-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted, #475569);
+}
+
+.adm-viewing {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--warning-soft, #fef3c7);
+  border: 1px solid var(--warning, #f59e0b);
+  color: var(--warning, #92400e);
+}
+
+.adm-viewing p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+}
+
+.adm-viewing > div:nth-child(2) {
+  flex: 1;
+  min-width: 220px;
+}
+
+.adm-viewing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Billing & plan card on a user's page. */
+.adm-billing {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.adm-billing,
+.adm-billing > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.adm-ws {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+
+.adm-ws-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.adm-ws-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.adm-ws-meta {
+  margin: 4px 0 10px;
+  font-size: 12.5px;
+}
+
+.adm-subhead {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* View as customer: their real dashboard fills the screen under a fixed "you are viewing" bar. */
+.adm-viewas-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg, #f6f8fc);
+}
+
+.adm-viewing-bar {
+  flex: 0 0 auto;
+  border-radius: 0;
+  border-width: 0 0 1px;
+  padding: 10px 16px;
+}
+
+.adm-viewas-app {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.adm-pos {
+  color: var(--success, #16a34a);
+  font-weight: 700;
+}
+
+.adm-neg {
+  color: var(--danger, #dc2626);
+  font-weight: 700;
+}
+
+/* ---- billing: needs attention + plan dialog ---- */
+
+.adm-issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.adm-issue {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-left-width: 4px;
+  display: grid;
+  gap: 8px;
+}
+
+.adm-issue-high {
+  border-left-color: var(--danger, #dc2626);
+}
+
+.adm-issue-medium {
+  border-left-color: var(--warning, #f59e0b);
+}
+
+.adm-issue-low {
+  border-left-color: var(--border, #cbd5e1);
+}
+
+.adm-issue-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.adm-issue p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.adm-fieldrow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.adm-field select {
+  border-radius: 10px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--panel, #fff);
+  color: var(--text, #0f172a);
+  padding: 9px 11px;
+  font: inherit;
+  font-weight: 400;
+}
+
+@media (max-width: 480px) {
+  .adm-fieldrow {
+    grid-template-columns: 1fr;
+  }
+}

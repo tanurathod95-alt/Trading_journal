@@ -9,7 +9,7 @@ export type AngelOneSyncResult = FillMatchResult
  * dedicated instrument-type field, so options vs futures is inferred from the standard CE/PE
  * trading-symbol suffix (e.g. "NIFTY24AUGFUT" vs "NIFTY24AUG24000CE"). Best-effort — flagged in
  * the plan as something to confirm against a real account's symbols. */
-function inferSegment(exchange: string, tradingSymbol: string): TradingSegment {
+export function inferSegment(exchange: string, tradingSymbol: string): TradingSegment {
   const ex = exchange.toUpperCase()
   if (ex === 'NSE' || ex === 'BSE') return 'CASH'
   const sym = tradingSymbol.toUpperCase()
@@ -27,7 +27,7 @@ function toDateString(value: string | undefined): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function normalizeAngelOneRow(row: AngelOneTradeBookRow): NormalizedFill {
+export function normalizeAngelOneRow(row: AngelOneTradeBookRow): NormalizedFill {
   return {
     fillId: row.tradeid,
     symbol: row.tradingsymbol,

@@ -5,6 +5,9 @@ import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 import './workspace/workspace.css'
 import './marketing/marketing.css'
+import { ErrorBoundary } from './components/ErrorBoundary.tsx'
+import { AdminPanel } from './admin/AdminPanel.tsx'
+import { DeveloperPanel } from './developer/DeveloperPanel.tsx'
 import { AuthGate } from './workspace/AuthGate.tsx'
 import { WorkspaceAuthProvider } from './workspace/WorkspaceAuthContext.tsx'
 import { ModeShell } from './workspace/ModeShell.tsx'
@@ -30,36 +33,74 @@ if (typeof crypto.randomUUID !== 'function') {
   })
 }
 
+function AdminApp() {
+  // Same sign-in gate as the app; the panel checks platform_role, and every /api/admin call is re-checked on the server.
+  return (
+    <ErrorBoundary label="Admin panel" fullPage>
+      <AuthGate>
+        <AdminPanel />
+      </AuthGate>
+    </ErrorBoundary>
+  )
+}
+
+function DeveloperApp() {
+  // Same sign-in gate as the app; the panel itself then checks platform_role, and every /api/dev call is re-checked on the server.
+  return (
+    <ErrorBoundary label="Developer panel" fullPage>
+      <AuthGate>
+        <DeveloperPanel />
+      </AuthGate>
+    </ErrorBoundary>
+  )
+}
+
 function TradingJournalApp() {
   return (
-    <WorkspaceAuthProvider>
+    <ErrorBoundary label="Trading Journal" fullPage>
       <AuthGate>
         <ModeShell />
       </AuthGate>
-    </WorkspaceAuthProvider>
+    </ErrorBoundary>
   )
 }
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route element={<MarketingLayout />}>
-          <Route index element={<Home />} />
-          <Route path="features" element={<Features />} />
-          <Route path="for-traders" element={<ForTraders />} />
-          <Route path="for-portfolio-managers" element={<ForPortfolioManagers />} />
-          <Route path="pricing" element={<Pricing />} />
-          <Route path="security" element={<Security />} />
-          <Route path="about" element={<About />} />
-          <Route path="contact" element={<Contact />} />
-        </Route>
-        {/* The actual SaaS product — everything built in Phases 1-10 — now
-            lives at /app instead of the root path, so the public marketing
-            site can own "/". Every existing login/workspace/journal
-            behavior is unchanged, just mounted under a new path. */}
-        <Route path="/app/*" element={<TradingJournalApp />} />
-      </Routes>
-    </BrowserRouter>
+    {/* Outermost boundary — the last line of defence. Anything that escapes every
+        narrower boundary below (a crash in the router itself, the auth provider, etc.)
+        lands here instead of leaving a blank white page. */}
+    <ErrorBoundary label="App" fullPage>
+      <BrowserRouter>
+        {/* Wraps both the marketing site and /app — the marketing site's nav
+            needs sign-in state too, since "Login"/"Get Started" now open the
+            auth modal right there on the homepage instead of navigating to a
+            separate full-page screen under /app. */}
+        <WorkspaceAuthProvider>
+          <Routes>
+            <Route element={<MarketingLayout />}>
+              <Route index element={<ErrorBoundary label="Home page"><Home /></ErrorBoundary>} />
+              <Route path="features" element={<ErrorBoundary label="Features page"><Features /></ErrorBoundary>} />
+              <Route path="for-traders" element={<ErrorBoundary label="For Traders page"><ForTraders /></ErrorBoundary>} />
+              <Route
+                path="for-portfolio-managers"
+                element={<ErrorBoundary label="For Portfolio Managers page"><ForPortfolioManagers /></ErrorBoundary>}
+              />
+              <Route path="pricing" element={<ErrorBoundary label="Pricing page"><Pricing /></ErrorBoundary>} />
+              <Route path="security" element={<ErrorBoundary label="Security page"><Security /></ErrorBoundary>} />
+              <Route path="about" element={<ErrorBoundary label="About page"><About /></ErrorBoundary>} />
+              <Route path="contact" element={<ErrorBoundary label="Contact page"><Contact /></ErrorBoundary>} />
+            </Route>
+            {/* The actual SaaS product — everything built in Phases 1-10 — now
+                lives at /app instead of the root path, so the public marketing
+                site can own "/". Every existing login/workspace/journal
+                behavior is unchanged, just mounted under a new path. */}
+            <Route path="/app/admin/*" element={<AdminApp />} />
+            <Route path="/app/dev/*" element={<DeveloperApp />} />
+            <Route path="/app/*" element={<TradingJournalApp />} />
+          </Routes>
+        </WorkspaceAuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 )

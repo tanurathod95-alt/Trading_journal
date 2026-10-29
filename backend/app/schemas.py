@@ -51,6 +51,7 @@ class UserOut(BaseModel):
     email: str
     display_name: str
     created_at: dt.datetime
+    platform_role: str = "USER"
 
     model_config = {"from_attributes": True}
 
@@ -77,10 +78,6 @@ class WorkspacePlanOut(BaseModel):
     plan: str
     limits: PlanLimitsOut
     trading_accounts_used: int
-
-
-class WorkspacePlanUpdate(BaseModel):
-    plan: str = Field(pattern="^(FREE|PRO|PREMIUM|BUSINESS)$")
 
 
 class TradingAccountCreate(BaseModel):
@@ -397,3 +394,13 @@ class ZerodhaTokenOut(BaseModel):
 
 class DhanTradesRequest(BaseModel):
     access_token: str
+
+
+class DhanTradeHistoryRequest(BaseModel):
+    """One page of Dhan's trade history for a date range (Dhan paginates it, counting pages from 0)."""
+
+    access_token: str = Field(min_length=1, max_length=4000)
+    # Strictly YYYY-MM-DD: these are placed into Dhan's URL path, so nothing else may get through.
+    from_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    to_date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    page: int = Field(default=0, ge=0, le=1000)

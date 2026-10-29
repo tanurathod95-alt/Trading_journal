@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { ApiError, workspaceApi } from './api'
+import { useEffect, useState, type FormEvent } from 'react'
+import { ApiError, workspaceApi, type SupportAccessSession } from './api'
 import { useWorkspaceAuth } from './WorkspaceAuthContext'
 
 export function ProfileModal({ onClose }: { onClose: () => void }) {
@@ -14,6 +14,16 @@ export function ProfileModal({ onClose }: { onClose: () => void }) {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordSaved, setPasswordSaved] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
+
+  // Every time platform support opened a read-only view of this account — shown so support never looks in secret.
+  const [supportViews, setSupportViews] = useState<SupportAccessSession[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    workspaceApi.supportAccess().then((r) => !cancelled && setSupportViews(r.sessions)).catch(() => !cancelled && setSupportViews(null))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   async function handleSaveName(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -93,6 +103,28 @@ export function ProfileModal({ onClose }: { onClose: () => void }) {
             {savingPassword ? 'Updating…' : 'Change password'}
           </button>
         </form>
+
+        {supportViews !== null && (
+          <section className="ws-add-account-form" aria-label="Support access to your data">
+            <p className="ws-section-title">Support access to your data</p>
+            {supportViews.length === 0 ? (
+              <p className="ws-muted small">Our support team has not looked at your account data.</p>
+            ) : (
+              <>
+                <p className="ws-muted small">
+                  Support can open a read-only view of your server-side accounts to help with a problem. Each time is listed here. They cannot change anything, and your personal-mode journal on this device is never visible to them.
+                </p>
+                <ul className="ws-muted small" style={{ margin: 0, paddingLeft: 18 }}>
+                  {supportViews.map((v) => (
+                    <li key={v.started_at}>
+                      {new Date(v.started_at).toLocaleString()} — {v.ended_at ? 'closed' : 'open now'}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+        )}
       </div>
     </div>
   )

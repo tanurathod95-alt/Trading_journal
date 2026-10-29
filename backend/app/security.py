@@ -9,6 +9,7 @@ import bcrypt
 from cryptography.fernet import Fernet, InvalidToken
 
 from .config import settings
+from .observability import tracked
 
 # Local-dev fallback key file — gitignored, generated once on first run,
 # never committed. This exists so no real encryption key ever has to be
@@ -30,10 +31,12 @@ def _resolve_broker_key() -> bytes:
     return generated
 
 
+@tracked("security.hash_password")
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
+@tracked("security.verify_password")
 def verify_password(password: str, password_hash: str) -> bool:
     try:
         return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
@@ -63,11 +66,13 @@ def _fernet() -> Fernet:
     return Fernet(_resolve_broker_key())
 
 
+@tracked("security.encrypt_secret")
 def encrypt_secret(plaintext: str) -> str:
     """Encrypts a broker credential field for storage. Never call this with anything that will be logged."""
     return _fernet().encrypt(plaintext.encode("utf-8")).decode("utf-8")
 
 
+@tracked("security.decrypt_secret")
 def decrypt_secret(ciphertext: str) -> str:
     try:
         return _fernet().decrypt(ciphertext.encode("utf-8")).decode("utf-8")
@@ -76,6 +81,7 @@ def decrypt_secret(ciphertext: str) -> str:
         raise ValueError("Could not decrypt stored broker credentials") from exc
 
 
+@tracked("security.verify_razorpay_signature")
 def verify_razorpay_payment_signature(order_id: str, payment_id: str, signature: str) -> bool:
     """
     Recomputes the HMAC-SHA256 Razorpay documents for order+payment

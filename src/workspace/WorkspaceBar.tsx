@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useNavigate } from 'react-router-dom'
 import { Bell, Menu } from 'lucide-react'
 import { AccountSwitcher } from './AccountSwitcher'
 import { InvitationsInbox } from './InvitationsInbox'
@@ -35,6 +37,22 @@ export function WorkspaceBar({
   const { me, currentWorkspace, logout, myInvitations, myPortfolioInvitations } = useWorkspaceAuth()
   const [showInvitations, setShowInvitations] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const navigate = useNavigate()
+
+  const handleLogout = async (): Promise<void> => {
+    // Navigate away from /app first, then clear auth state — otherwise
+    // AuthGate (still mounted at /app for a tick) sees signed-out and
+    // redirects to "/" with openAuth:'login' itself, so the user would land
+    // on the homepage with the login popup already open instead of a clean
+    // homepage.
+    navigate('/')
+    try {
+      sessionStorage.removeItem('journal-mode')
+    } catch {
+      // storage unavailable — nothing to clear
+    }
+    await logout()
+  }
 
   if (!me || !currentWorkspace) {
     return null
@@ -77,12 +95,14 @@ export function WorkspaceBar({
           onProfile={() => setShowProfile(true)}
           onMyWorkspace={onChangeMode}
           onBilling={onBilling}
-          onLogout={() => void logout()}
+          onAdmin={me.user.platform_role === 'ADMIN' || me.user.platform_role === 'DEVELOPER' ? () => navigate('/app/admin') : undefined}
+          onDeveloper={me.user.platform_role === 'DEVELOPER' ? () => navigate('/app/dev') : undefined}
+          onLogout={() => void handleLogout()}
         />
       </div>
 
-      {showInvitations && <InvitationsInbox onClose={() => setShowInvitations(false)} />}
-      {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showInvitations && createPortal(<InvitationsInbox onClose={() => setShowInvitations(false)} />, document.body)}
+      {showProfile && createPortal(<ProfileModal onClose={() => setShowProfile(false)} />, document.body)}
     </div>
   )
 }

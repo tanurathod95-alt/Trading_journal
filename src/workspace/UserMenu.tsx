@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Building2, LogOut, Receipt, User } from 'lucide-react'
+import { Activity, Building2, LogOut, Receipt, ShieldCheck, User } from 'lucide-react'
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/)
@@ -12,6 +12,8 @@ export function UserMenu({
   onProfile,
   onMyWorkspace,
   onBilling,
+  onAdmin,
+  onDeveloper,
   onLogout,
 }: {
   displayName: string
@@ -19,6 +21,10 @@ export function UserMenu({
   onProfile: () => void
   onMyWorkspace?: () => void
   onBilling?: () => void
+  /** Only passed for platform staff (admins and developers) — opens the admin panel. */
+  onAdmin?: () => void
+  /** Only passed for platform developers — opens the developer panel. */
+  onDeveloper?: () => void
   onLogout: () => void
 }) {
   const [open, setOpen] = useState(false)
@@ -63,6 +69,18 @@ export function UserMenu({
               <button type="button" className="ws-dropdown-item" onClick={() => { setOpen(false); onBilling() }}>
                 <Receipt size={15} />
                 Billing
+              </button>
+            )}
+            {onAdmin && (
+              <button type="button" className="ws-dropdown-item" onClick={() => { setOpen(false); onAdmin() }}>
+                <ShieldCheck size={15} />
+                Admin console
+              </button>
+            )}
+            {onDeveloper && (
+              <button type="button" className="ws-dropdown-item" onClick={() => { setOpen(false); onDeveloper() }}>
+                <Activity size={15} />
+                Developer console
               </button>
             )}
             <button type="button" className="ws-dropdown-item ws-dropdown-item-danger" onClick={() => { setOpen(false); onLogout() }}>
